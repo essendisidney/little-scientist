@@ -4,6 +4,35 @@ import { supabase } from '@/lib/supabase'
 
 type Tab = 'overview' | 'accounting' | 'visitors'
 
+function toCsv(rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return ''
+  const headers = Object.keys(rows[0])
+  const esc = (v: unknown) => {
+    const s = v == null ? '' : String(v)
+    const needs = /[",\n\r]/.test(s)
+    const inner = s.replace(/"/g, '""')
+    return needs ? `"${inner}"` : inner
+  }
+  const lines = [headers.join(',')]
+  for (const r of rows) {
+    lines.push(headers.map(h => esc(r[h])).join(','))
+  }
+  return lines.join('\n')
+}
+
+function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
+  const csv = toCsv(rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [kpis, setKpis] = useState({ ticketRev: 0, visitors: 0, bookings: 0 })
@@ -22,6 +51,7 @@ export default function DashboardPage() {
     { code: string; name: string; account_type: string; net_balance: number }[]
   >([])
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
@@ -57,6 +87,76 @@ export default function DashboardPage() {
     '10:00-12:00': '10am – 12pm',
     '12:00-14:00': '12pm – 2pm',
     '14:00-16:00': '2pm – 4pm',
+  }
+
+  async function exportOverview() {
+    setExporting(true)
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('booker_name, booker_phone, adult_count, child_count, sessions(time_slot, session_date)')
+      if (error) throw error
+      const rows =
+        (((data || []) as any[])
+          .filter(b => b.sessions?.session_date === today)
+          .map(b => ({
+            visitor_name: b.booker_name || '',
+            phone: b.booker_phone || '',
+            count: (b.adult_count || 0) + (b.child_count || 0),
+            time_slot: SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '',
+          })) as Record<string, unknown>[]) || []
+      downloadCsv(`overview-bookings-${today}.csv`, rows)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function exportVisitors() {
+    setExporting(true)
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status, sessions(session_date)')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      const rows =
+        (data || []).map((b: any) => ({
+          ref: b.booking_ref,
+          name: b.booker_name || '',
+          adult_count: b.adult_count,
+          child_count: b.child_count,
+          amount_kes: b.total_amount_kes,
+          payment_status: b.payment_status,
+          date: b.sessions?.session_date || '',
+        })) || []
+      downloadCsv(`visitors-bookings-${today}.csv`, rows)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function exportAccounting() {
+    setExporting(true)
+    try {
+      const { data, error } = await supabase
+        // Prefer a view if present in DB
+        .from('v_journal_entries')
+        .select('*')
+        .order('entry_date', { ascending: false })
+      if (error) throw error
+      const rows =
+        (data || []).map((e: any) => ({
+          date: e.entry_date || e.date || '',
+          description: e.description || '',
+          debit_account: e.debit_account || e.debit_code || e.debit || '',
+          credit_account: e.credit_account || e.credit_code || e.credit || '',
+          amount: e.amount_kes ?? e.amount ?? '',
+          mpesa_receipt: e.mpesa_receipt || e.mpesa_receipt_number || '',
+        })) || []
+      downloadCsv(`accounting-journal-${today}.csv`, rows)
+    } finally {
+      setExporting(false)
+    }
   }
 
   if (loading)
@@ -138,7 +238,26 @@ export default function DashboardPage() {
         {/* Overview */}
         {tab === 'overview' && (
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 20 }}>
-            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16 }}>Today's sessions — {today}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>Today's sessions — {today}</div>
+              <button
+                onClick={exportOverview}
+                disabled={exporting}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: exporting ? 'rgba(255,255,255,0.4)' : '#ffd700',
+                  padding: '8px 12px',
+                  borderRadius: 10,
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  fontFamily: 'Nunito, sans-serif',
+                }}
+              >
+                {exporting ? 'Exporting…' : '⬇️ Export CSV'}
+              </button>
+            </div>
             {sessions.length === 0 ? (
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No sessions for today yet.</div>
             ) : (
@@ -180,7 +299,26 @@ export default function DashboardPage() {
               overflow: 'hidden',
             }}
           >
-            <div style={{ padding: '16px 20px', fontWeight: 800, fontSize: 16 }}>Trial Balance</div>
+            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>Trial Balance</div>
+              <button
+                onClick={exportAccounting}
+                disabled={exporting}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: exporting ? 'rgba(255,255,255,0.4)' : '#ffd700',
+                  padding: '8px 12px',
+                  borderRadius: 10,
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  fontFamily: 'Nunito, sans-serif',
+                }}
+              >
+                {exporting ? 'Exporting…' : '⬇️ Export CSV'}
+              </button>
+            </div>
             {trialBalance.length === 0 ? (
               <div style={{ padding: '16px 20px', color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>
                 No journal entries yet. Entries appear automatically after the first payment.
@@ -261,7 +399,26 @@ export default function DashboardPage() {
               overflow: 'hidden',
             }}
           >
-            <div style={{ padding: '16px 20px', fontWeight: 800, fontSize: 16 }}>Recent bookings</div>
+            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>Recent bookings</div>
+              <button
+                onClick={exportVisitors}
+                disabled={exporting}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: exporting ? 'rgba(255,255,255,0.4)' : '#ffd700',
+                  padding: '8px 12px',
+                  borderRadius: 10,
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  fontFamily: 'Nunito, sans-serif',
+                }}
+              >
+                {exporting ? 'Exporting…' : '⬇️ Export CSV'}
+              </button>
+            </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.04)' }}>

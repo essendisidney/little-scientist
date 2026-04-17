@@ -2,8 +2,11 @@
 import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 
-const ADULT_PRICE = 500
-const CHILD_PRICE = 300
+const PRICING = {
+  adult18PlusKes: 1000,
+  child95cmTo17Kes: 800,
+  childUnder95cmKes: 0,
+} as const
 const SLOT_LABELS: Record<string, string> = {
   '10:00-12:00': '10:00 AM – 12:00 PM',
   '12:00-14:00': '12:00 PM – 2:00 PM',
@@ -32,7 +35,9 @@ export default function BookPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [adults, setAdults] = useState(1)
-  const [children, setChildren] = useState(1)
+  const [childrenPaid, setChildrenPaid] = useState(1)
+  const [childrenFreeUnder95, setChildrenFreeUnder95] = useState(0)
+  const [childCountMode, setChildCountMode] = useState<'height' | 'age'>('height')
   const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -108,7 +113,7 @@ export default function BookPage() {
     if (step === 'pending') return pollStatus()
   }, [step, pollStatus])
 
-  const total = adults * ADULT_PRICE + children * CHILD_PRICE
+  const total = adults * PRICING.adult18PlusKes + childrenPaid * PRICING.child95cmTo17Kes
   const monthName = new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-KE', {
     month: 'long',
     year: 'numeric',
@@ -130,7 +135,7 @@ export default function BookPage() {
       const res = await fetch('/api/mpesa/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: selectedSession?.id, phone, name, adultCount: adults, childCount: children }),
+        body: JSON.stringify({ sessionId: selectedSession?.id, phone, name, adultCount: adults, childCount: childrenPaid }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Payment failed')
@@ -591,10 +596,64 @@ export default function BookPage() {
                 </h2>
                 <div className="warn">🤝 Every booking needs at least 1 adult with 1 child</div>
 
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    marginBottom: 14,
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 16,
+                    padding: '10px 10px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setChildCountMode('height')}
+                    style={{
+                      flex: 1,
+                      borderRadius: 14,
+                      border: childCountMode === 'height' ? '2px solid rgba(255,107,157,0.65)' : '1px solid rgba(255,255,255,0.12)',
+                      background:
+                        childCountMode === 'height'
+                          ? 'linear-gradient(135deg,rgba(255,107,157,0.22),rgba(255,215,0,0.12))'
+                          : 'rgba(255,255,255,0.03)',
+                      color: '#fff',
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      fontFamily: "'Fredoka One', cursive",
+                      fontSize: 14,
+                    }}
+                  >
+                    📏 By height
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChildCountMode('age')}
+                    style={{
+                      flex: 1,
+                      borderRadius: 14,
+                      border: childCountMode === 'age' ? '2px solid rgba(127,255,212,0.6)' : '1px solid rgba(255,255,255,0.12)',
+                      background: childCountMode === 'age' ? 'rgba(127,255,212,0.14)' : 'rgba(255,255,255,0.03)',
+                      color: '#fff',
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      fontFamily: "'Fredoka One', cursive",
+                      fontSize: 14,
+                    }}
+                  >
+                    🎂 By age
+                  </button>
+                </div>
+
+                <div className="warn" style={{ background: 'rgba(255,215,0,0.07)' }}>
+                  👶 Children under 95cm enter <strong>FREE</strong> — no ticket needed. Please inform gate staff.
+                </div>
+
                 <div className="ctr">
                   <div className="ctr-info">
-                    <h3>🧑 Adults</h3>
-                    <p style={{ color: '#FF6B9D' }}>KES {ADULT_PRICE.toLocaleString()} per person</p>
+                    <h3>🧑 Adults (18+)</h3>
+                    <p style={{ color: '#FF6B9D' }}>KES {PRICING.adult18PlusKes.toLocaleString()}</p>
                   </div>
                   <div className="ctr-ctrl">
                     <button className="ctr-btn ba" onClick={() => setAdults(Math.max(1, adults - 1))}>
@@ -609,15 +668,31 @@ export default function BookPage() {
 
                 <div className="ctr">
                   <div className="ctr-info">
-                    <h3>👧 Children</h3>
-                    <p style={{ color: '#7FFFD4' }}>KES {CHILD_PRICE.toLocaleString()} per person</p>
+                    <h3>👧 Children 95cm–17yrs</h3>
+                    <p style={{ color: '#7FFFD4' }}>KES {PRICING.child95cmTo17Kes.toLocaleString()}</p>
                   </div>
                   <div className="ctr-ctrl">
-                    <button className="ctr-btn bc" onClick={() => setChildren(Math.max(1, children - 1))}>
+                    <button className="ctr-btn bc" onClick={() => setChildrenPaid(Math.max(0, childrenPaid - 1))}>
                       −
                     </button>
-                    <span className="ctr-val">{children}</span>
-                    <button className="ctr-btn bc" onClick={() => setChildren(children + 1)}>
+                    <span className="ctr-val">{childrenPaid}</span>
+                    <button className="ctr-btn bc" onClick={() => setChildrenPaid(childrenPaid + 1)}>
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="ctr" style={{ opacity: childCountMode === 'height' ? 1 : 0.92 }}>
+                  <div className="ctr-info">
+                    <h3>🧸 Under 95cm (FREE)</h3>
+                    <p style={{ color: 'rgba(255,255,255,0.5)' }}>{childCountMode === 'height' ? 'Count by height' : 'Optional'}</p>
+                  </div>
+                  <div className="ctr-ctrl">
+                    <button className="ctr-btn bc" onClick={() => setChildrenFreeUnder95(Math.max(0, childrenFreeUnder95 - 1))}>
+                      −
+                    </button>
+                    <span className="ctr-val">{childrenFreeUnder95}</span>
+                    <button className="ctr-btn bc" onClick={() => setChildrenFreeUnder95(childrenFreeUnder95 + 1)}>
                       +
                     </button>
                   </div>
@@ -659,11 +734,15 @@ export default function BookPage() {
                   </div>
                   <div className="sum-row">
                     <span>🧑 Adults × {adults}</span>
-                    <span>KES {(adults * ADULT_PRICE).toLocaleString()}</span>
+                    <span>KES {(adults * PRICING.adult18PlusKes).toLocaleString()}</span>
                   </div>
                   <div className="sum-row">
-                    <span>👧 Children × {children}</span>
-                    <span>KES {(children * CHILD_PRICE).toLocaleString()}</span>
+                    <span>👧 Children 95cm–17yrs × {childrenPaid}</span>
+                    <span>KES {(childrenPaid * PRICING.child95cmTo17Kes).toLocaleString()}</span>
+                  </div>
+                  <div className="sum-row">
+                    <span>🧸 Under 95cm (FREE) × {childrenFreeUnder95}</span>
+                    <span>KES 0</span>
                   </div>
                   <div className="sum-row b">
                     <span>Total</span>
@@ -743,7 +822,8 @@ export default function BookPage() {
                   <div className="sum-row">
                     <span>👨‍👩‍👧</span>
                     <span>
-                      {adults} adult{adults > 1 ? 's' : ''} · {children} child{children > 1 ? 'ren' : ''}
+                    {adults} adult{adults > 1 ? 's' : ''} · {childrenPaid + childrenFreeUnder95} child
+                    {childrenPaid + childrenFreeUnder95 > 1 ? 'ren' : ''}
                     </span>
                   </div>
                 </div>

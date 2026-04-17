@@ -14,24 +14,169 @@ type Result = {
   }
 }
 
+type OfflineTicket = {
+  qr: string
+  isUsed: boolean
+  usedAt: string | null
+  type: string
+  bookingRef: string | null
+  bookerName: string | null
+  adultCount: number
+  childCount: number
+  sessionDate: string | null
+  timeSlot: string | null
+}
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function cacheKey(day: string) {
+  return `ls_verify_cache_${day}`
+}
+
+function queueKey() {
+  return `ls_verify_offline_queue`
+}
+
 export default function VerifyPage() {
   const [result, setResult] = useState<Result | null>(null)
   const [loading, setLoading] = useState(false)
   const [manualRef, setManualRef] = useState('')
   const [scanning, setScanning] = useState(true)
+  const [offline, setOffline] = useState(false)
+  const [cacheCount, setCacheCount] = useState(0)
+  const [cacheUpdatedAt, setCacheUpdatedAt] = useState<string | null>(null)
   const scannerRef = useRef<unknown>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
+    setOffline(!navigator.onLine)
+    const on = () => setOffline(false)
+    const off = () => setOffline(true)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
+
     const script = document.createElement('script')
     script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
     script.onload = () => initScanner()
     document.body.appendChild(script)
+
+    // Warm cache when online
+    if (navigator.onLine) {
+      refreshOfflineCache().catch(() => {})
+      syncOfflineQueue().catch(() => {})
+    } else {
+      readCacheMeta()
+    }
+
     return () => {
       stopScanner()
       if (document.body.contains(script)) document.body.removeChild(script)
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
     }
   }, [])
+
+  useEffect(() => {
+    if (!offline) {
+      refreshOfflineCache().catch(() => {})
+      syncOfflineQueue().catch(() => {})
+    }
+  }, [offline])
+
+  function readCacheMeta() {
+    const day = todayStr()
+    try {
+      const raw = localStorage.getItem(cacheKey(day))
+      if (!raw) {
+        setCacheCount(0)
+        setCacheUpdatedAt(null)
+        return
+      }
+      const parsed = JSON.parse(raw) as { updatedAt?: string; tickets?: Record<string, OfflineTicket> }
+      const cnt = parsed.tickets ? Object.keys(parsed.tickets).length : 0
+      setCacheCount(cnt)
+      setCacheUpdatedAt(parsed.updatedAt || null)
+    } catch {
+      setCacheCount(0)
+      setCacheUpdatedAt(null)
+    }
+  }
+
+  async function refreshOfflineCache() {
+    const day = todayStr()
+    const res = await fetch('/api/verify/today')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to refresh cache')
+    const ticketsArr: OfflineTicket[] = data.tickets || []
+    const tickets: Record<string, OfflineTicket> = {}
+    for (const t of ticketsArr) tickets[t.qr] = t
+    localStorage.setItem(cacheKey(day), JSON.stringify({ updatedAt: new Date().toISOString(), tickets }))
+    setCacheCount(Object.keys(tickets).length)
+    setCacheUpdatedAt(new Date().toISOString())
+  }
+
+  function getOfflineTickets(): Record<string, OfflineTicket> {
+    const day = todayStr()
+    try {
+      const raw = localStorage.getItem(cacheKey(day))
+      if (!raw) return {}
+      const parsed = JSON.parse(raw) as { tickets?: Record<string, OfflineTicket> }
+      return parsed.tickets || {}
+    } catch {
+      return {}
+    }
+  }
+
+  function setOfflineTickets(next: Record<string, OfflineTicket>) {
+    const day = todayStr()
+    localStorage.setItem(cacheKey(day), JSON.stringify({ updatedAt: new Date().toISOString(), tickets: next }))
+    setCacheCount(Object.keys(next).length)
+    setCacheUpdatedAt(new Date().toISOString())
+  }
+
+  function enqueueOfflineScan(qr: string) {
+    try {
+      const raw = localStorage.getItem(queueKey())
+      const q = raw ? (JSON.parse(raw) as { qr: string; at: string }[]) : []
+      q.push({ qr, at: new Date().toISOString() })
+      localStorage.setItem(queueKey(), JSON.stringify(q))
+    } catch {}
+  }
+
+  async function syncOfflineQueue() {
+    if (!navigator.onLine) return
+    let q: { qr: string; at: string }[] = []
+    try {
+      const raw = localStorage.getItem(queueKey())
+      q = raw ? (JSON.parse(raw) as { qr: string; at: string }[]) : []
+    } catch {
+      q = []
+    }
+    if (q.length === 0) return
+
+    const remaining: typeof q = []
+    for (const item of q) {
+      try {
+        const res = await fetch(`/api/verify/${encodeURIComponent(item.qr)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffId: 'gate-staff' }),
+        })
+        if (!res.ok && res.status !== 409) {
+          remaining.push(item)
+        }
+      } catch {
+        remaining.push(item)
+      }
+    }
+    localStorage.setItem(queueKey(), JSON.stringify(remaining))
+  }
 
   function initScanner() {
     // @ts-expect-error dynamically loaded
@@ -64,13 +209,43 @@ export default function VerifyPage() {
     setLoading(true)
     stopScanner()
     try {
-      const res = await fetch(`/api/verify/${encodeURIComponent(qrValue)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: 'gate-staff' }),
-      })
-      const data = await res.json()
-      setResult(data)
+      if (!navigator.onLine) {
+        // OFFLINE verification
+        const tickets = getOfflineTickets()
+        const t = tickets[qrValue]
+        if (!t) {
+          setResult({ valid: false, message: 'OFFLINE: Ticket not found in cached list.' })
+        } else if (t.isUsed) {
+          setResult({ valid: false, message: `OFFLINE: Already used${t.usedAt ? ` at ${new Date(t.usedAt).toLocaleString('en-KE')}` : ''}` })
+        } else if (t.sessionDate !== todayStr()) {
+          setResult({ valid: false, message: `OFFLINE: Ticket is for ${t.sessionDate}, not today.` })
+        } else {
+          const now = new Date().toISOString()
+          tickets[qrValue] = { ...t, isUsed: true, usedAt: now }
+          setOfflineTickets(tickets)
+          enqueueOfflineScan(qrValue)
+          setResult({
+            valid: true,
+            message: 'OFFLINE: Valid ticket (will sync when online).',
+            ticket: {
+              type: t.type,
+              bookingRef: t.bookingRef || '',
+              session: `${t.sessionDate} ${t.timeSlot}`,
+              bookerName: t.bookerName,
+              adultCount: t.adultCount,
+              childCount: t.childCount,
+            },
+          })
+        }
+      } else {
+        const res = await fetch(`/api/verify/${encodeURIComponent(qrValue)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ staffId: 'gate-staff' }),
+        })
+        const data = await res.json()
+        setResult(data)
+      }
     } catch {
       setResult({ valid: false, message: 'Network error. Try again.' })
     } finally {
@@ -94,6 +269,29 @@ export default function VerifyPage() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
       `}</style>
       <div style={{ minHeight: '100vh', background: '#060d1a', color: '#fff', fontFamily: 'Nunito, sans-serif' }}>
+        {offline && (
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'rgba(245,158,11,0.18)',
+              borderBottom: '1px solid rgba(245,158,11,0.35)',
+              color: '#fbbf24',
+              padding: '10px 16px',
+              fontWeight: 900,
+              fontSize: 13,
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <span>OFFLINE MODE — using cached tickets</span>
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>
+              Cache: {cacheCount} · {cacheUpdatedAt ? `Updated ${new Date(cacheUpdatedAt).toLocaleTimeString('en-KE')}` : 'Not ready'}
+            </span>
+          </div>
+        )}
         {/* Full screen result */}
         {result && (
           <div

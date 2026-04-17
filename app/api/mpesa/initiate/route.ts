@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { initiateSTKPush } from '@/lib/mpesa'
 
-const ADULT_PRICE = 500
-const CHILD_PRICE = 300
+const ADULT_PRICE = 1000
+const CHILD_PRICE = 800
 
 export async function POST(req: NextRequest) {
   try {
     const { sessionId, phone, name, adultCount, childCount } = await req.json()
 
-    if (!sessionId || !phone || adultCount < 1 || childCount < 1) {
+    if (!sessionId || !phone || adultCount < 1 || childCount < 0) {
       return NextResponse.json(
-        { error: 'Invalid request. Must have at least 1 adult and 1 child.' },
+        { error: 'Invalid request. Must have at least 1 adult.' },
         { status: 400 }
       )
     }
