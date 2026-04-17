@@ -35,8 +35,10 @@ body {
 .twinkle-stars {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: 50;
   pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.22;
   background:
     radial-gradient(ellipse at 10% 0%, rgba(42, 8, 69, 0.55) 0%, transparent 55%),
     radial-gradient(ellipse at 90% 15%, rgba(10, 45, 92, 0.55) 0%, transparent 55%),
