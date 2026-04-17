@@ -833,51 +833,6 @@ export default function BookPage() {
         </div>
 
         <div className="outer">
-          {step === 'date' && (
-            <div className="hero">
-              <div className="hero-side left"><KidScope /></div>
-              <div className="hero-center">
-                <h1 className="hero-h">
-                  <span className="l1">Discover. Explore.</span>
-                  <span className="l2">Experiment!</span>
-                </h1>
-                <p className="hero-sub">Kenya's premier children's science park — where young minds ignite. Book your family adventure today.</p>
-                <div className="hero-pills">
-                  <div className="hp hp1">🧪 50+ Experiments</div>
-                  <div className="hp hp2">🚀 Space & Rockets</div>
-                  <div className="hp hp3">🌿 Nature Lab</div>
-                </div>
-              </div>
-              <div className="hero-side right"><KidRocket /></div>
-            </div>
-          )}
-
-          {step === 'date' && (
-            <div className="equip" style={{ marginTop: 28 }}>
-              <div className="equip-inner">
-                {[
-                  { i: '🔭', l: 'Telescope', d: '2.4s', dl: '0s' },
-                  { i: '⚗️', l: 'Chemistry', d: '3s', dl: '0.3s' },
-                  { i: '🧲', l: 'Magnetics', d: '2.7s', dl: '0.6s' },
-                  { i: '🦠', l: 'Biology', d: '3.3s', dl: '0.9s' },
-                  { i: '⚡', l: 'Electricity', d: '2.5s', dl: '1.2s' },
-                  { i: '🌋', l: 'Geology', d: '3.5s', dl: '0.4s' },
-                  { i: '🧬', l: 'DNA & Genetics', d: '2.9s', dl: '0.7s' },
-                  { i: '🤖', l: 'Robotics', d: '3.1s', dl: '1s' },
-                  { i: '🌊', l: 'Oceanography', d: '2.8s', dl: '0.2s' },
-                  { i: '🌞', l: 'Solar Energy', d: '3.4s', dl: '0.5s' },
-                  { i: '🎨', l: 'Science Art', d: '2.6s', dl: '0.8s' },
-                  { i: '🧊', l: 'Cryogenics', d: '3.2s', dl: '1.1s' },
-                ].map(({ i, l, d, dl }) => (
-                  <div className="eq" key={l} style={{ ['--d' as any]: d, ['--del' as any]: dl }}>
-                    <div className="eq-icon">{i}</div>
-                    <div className="eq-label">{l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="bcard">
             <div className="step-num-row">
               {(['date', 'slot', 'count', 'payment'] as Step[]).map(s => {
@@ -1075,6 +1030,52 @@ export default function BookPage() {
               </div>
             )}
           </div>
+
+          {/* Marketing/atmosphere content goes BELOW booking for speed */}
+          {step === 'date' && (
+            <div className="hero" style={{ marginTop: 26 }}>
+              <div className="hero-side left"><KidScope /></div>
+              <div className="hero-center">
+                <h1 className="hero-h">
+                  <span className="l1">Discover. Explore.</span>
+                  <span className="l2">Experiment!</span>
+                </h1>
+                <p className="hero-sub">Kenya's premier children's science park — where young minds ignite. Book your family adventure today.</p>
+                <div className="hero-pills">
+                  <div className="hp hp1">🧪 50+ Experiments</div>
+                  <div className="hp hp2">🚀 Space & Rockets</div>
+                  <div className="hp hp3">🌿 Nature Lab</div>
+                </div>
+              </div>
+              <div className="hero-side right"><KidRocket /></div>
+            </div>
+          )}
+
+          {step === 'date' && (
+            <div className="equip">
+              <div className="equip-inner">
+                {[
+                  { i: '🔭', l: 'Telescope', d: '2.4s', dl: '0s' },
+                  { i: '⚗️', l: 'Chemistry', d: '3s', dl: '0.3s' },
+                  { i: '🧲', l: 'Magnetics', d: '2.7s', dl: '0.6s' },
+                  { i: '🦠', l: 'Biology', d: '3.3s', dl: '0.9s' },
+                  { i: '⚡', l: 'Electricity', d: '2.5s', dl: '1.2s' },
+                  { i: '🌋', l: 'Geology', d: '3.5s', dl: '0.4s' },
+                  { i: '🧬', l: 'DNA & Genetics', d: '2.9s', dl: '0.7s' },
+                  { i: '🤖', l: 'Robotics', d: '3.1s', dl: '1s' },
+                  { i: '🌊', l: 'Oceanography', d: '2.8s', dl: '0.2s' },
+                  { i: '🌞', l: 'Solar Energy', d: '3.4s', dl: '0.5s' },
+                  { i: '🎨', l: 'Science Art', d: '2.6s', dl: '0.8s' },
+                  { i: '🧊', l: 'Cryogenics', d: '3.2s', dl: '1.1s' },
+                ].map(({ i, l, d, dl }) => (
+                  <div className="eq" key={l} style={{ ['--d' as any]: d, ['--del' as any]: dl }}>
+                    <div className="eq-icon">{i}</div>
+                    <div className="eq-label">{l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {step === 'date' && (
             <div className="feat-grid">
