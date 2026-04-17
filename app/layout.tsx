@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Little Scientist — Book Your Visit',
@@ -13,6 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body style={{ margin: 0, padding: 0, background: '#08081a' }}>
+        <div aria-hidden className="twinkle-stars" />
         {children}
       </body>
     </html>
