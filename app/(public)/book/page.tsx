@@ -666,44 +666,45 @@ export default function BookPage() {
         .eq-icon { font-size:36px;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.4)); }
         .eq-label { font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap; }
 
-        .bcard { position:relative;z-index:5;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.1);border-radius:32px;padding:52px 56px;backdrop-filter:blur(12px);box-shadow:0 24px 90px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.04) inset;overflow:hidden; }
+        .bcard { position:relative;z-index:5;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.1);border-radius:28px;padding:38px 44px;backdrop-filter:blur(12px);box-shadow:0 24px 90px rgba(0,0,0,0.45),0 0 0 1px rgba(255,255,255,0.04) inset;overflow:hidden; }
         .bcard::before { content:'';position:absolute;top:-1px;left:15%;right:15%;height:3px;background:linear-gradient(90deg,transparent,#FF6B9D,#FFD700,#7FFFD4,transparent);border-radius:3px; }
 
         .step-pill { display:inline-flex;align-items:center;gap:8px;background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.22);color:#FFD700;font-size:12px;font-weight:800;padding:6px 16px;border-radius:24px;margin-bottom:20px;text-transform:uppercase;letter-spacing:0.1em; }
-        .step-num-row { display:flex;gap:8px;margin-bottom:28px; }
+        .step-num-row { display:flex;gap:8px;margin-bottom:18px; }
         .step-dot { height:5px;border-radius:3px;transition:all 0.4s; }
         .step-dot.done { background:linear-gradient(90deg,#FF6B9D,#FFD700);flex:1; }
         .step-dot.active { background:linear-gradient(90deg,#FF6B9D,#FFD700);flex:2;animation:dotpulse 1.5s ease-in-out infinite; }
         @keyframes dotpulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
         .step-dot.todo { background:rgba(255,255,255,0.12);flex:1; }
 
-        .step-title { font-family:'Fredoka One',cursive;font-size:clamp(32px,4vw,46px);line-height:1.15;margin-bottom:10px; }
+        .step-title { font-family:'Fredoka One',cursive;font-size:clamp(28px,3.4vw,40px);line-height:1.15;margin-bottom:8px; }
         .step-title span { background:linear-gradient(90deg,#FF6B9D,#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
-        .step-sub { font-size:15px;color:rgba(255,255,255,0.5);margin-bottom:32px;line-height:1.6; }
+        .step-sub { font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:18px;line-height:1.55; }
 
         .cal-nav-row { display:flex;align-items:center;justify-content:space-between;margin-bottom:24px; }
-        .cal-month { font-family:'Fredoka One',cursive;font-size:28px;background:linear-gradient(90deg,#FF6B9D,#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
-        .cal-nav-btn { background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:#fff;width:44px;height:44px;border-radius:14px;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;font-family:'Nunito',sans-serif;font-weight:900; }
-        .cal-nav-btn:hover { background:rgba(255,107,157,0.2);border-color:rgba(255,107,157,0.5);transform:scale(1.1); }
+        .cal-nav-row { margin-bottom:14px; }
+        .cal-month { font-family:'Fredoka One',cursive;font-size:22px;background:linear-gradient(90deg,#FF6B9D,#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
+        .cal-nav-btn { background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:#fff;width:38px;height:38px;border-radius:12px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;font-family:'Nunito',sans-serif;font-weight:900; }
+        .cal-nav-btn:hover { background:rgba(255,107,157,0.2);border-color:rgba(255,107,157,0.5);transform:scale(1.06); }
         .cal-nav-btn:disabled { opacity:0.2;cursor:not-allowed;transform:none; }
-        .cal-grid { display:grid;grid-template-columns:repeat(7,1fr);gap:8px; }
-        .cal-dow { text-align:center;font-size:12px;font-weight:800;color:rgba(255,255,255,0.3);padding:6px 0 12px;text-transform:uppercase;letter-spacing:0.05em; }
-        .cal-day { aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;transition:all 0.2s;border:2px solid transparent;cursor:default;position:relative; }
-        .cal-day-num { font-size:16px;font-weight:900;line-height:1; }
+        .cal-grid { display:grid;grid-template-columns:repeat(7,1fr);gap:6px; }
+        .cal-dow { text-align:center;font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);padding:4px 0 10px;text-transform:uppercase;letter-spacing:0.05em; }
+        .cal-day { aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:14px;transition:all 0.2s;border:2px solid transparent;cursor:default;position:relative; }
+        .cal-day-num { font-size:14px;font-weight:900;line-height:1; }
         .cal-day-dot { width:6px;height:6px;border-radius:50%;margin-top:4px; }
         .cal-day.bookable { background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.1);cursor:pointer; }
-        .cal-day.bookable:hover { transform:scale(1.18);box-shadow:0 8px 28px rgba(255,107,157,0.35);background:rgba(255,107,157,0.18);border-color:rgba(255,107,157,0.6); }
+        .cal-day.bookable:hover { transform:scale(1.12);box-shadow:0 8px 24px rgba(255,107,157,0.32);background:rgba(255,107,157,0.16);border-color:rgba(255,107,157,0.6); }
         .cal-day.bookable:hover .cal-day-num { background:linear-gradient(90deg,#FF6B9D,#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
         .cal-day.bookable .cal-day-dot { background:rgba(255,255,255,0.25); }
         .cal-day.wknd { background:rgba(127,255,212,0.07);border-color:rgba(127,255,212,0.18); }
         .cal-day.wknd .cal-day-num { background:linear-gradient(90deg,#7FFFD4,#00bfff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
         .cal-day.wknd .cal-day-dot { background:#7FFFD4; }
         .cal-day.wknd:hover { background:rgba(127,255,212,0.18);border-color:rgba(127,255,212,0.6);box-shadow:0 8px 28px rgba(127,255,212,0.3); }
-        .cal-day.selected { background:linear-gradient(135deg,rgba(255,107,157,0.28),rgba(255,215,0,0.16));border-color:#FF6B9D;transform:scale(1.15);box-shadow:0 10px 32px rgba(255,107,157,0.4); }
+        .cal-day.selected { background:linear-gradient(135deg,rgba(255,107,157,0.28),rgba(255,215,0,0.16));border-color:#FF6B9D;transform:scale(1.10);box-shadow:0 10px 28px rgba(255,107,157,0.36); }
         .cal-day.selected .cal-day-num { background:linear-gradient(90deg,#FF6B9D,#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
         .cal-day.past,.cal-day.toofar { opacity:0.14; }
         .cal-day.empty { border:none;background:none; }
-        .cal-legend { display:flex;gap:22px;margin-top:18px; }
+        .cal-legend { display:flex;gap:18px;margin-top:12px; }
         .leg { display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,0.42);font-weight:700; }
         .leg-sq { width:14px;height:14px;border-radius:5px; }
 
