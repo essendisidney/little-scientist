@@ -391,20 +391,144 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
             </div>
           ))}
 
-          <div
-            className="no-print"
-            style={{
-              background: 'rgba(127,255,212,0.04)',
-              border: '1px solid rgba(127,255,212,0.12)',
-              borderRadius: 12,
-              padding: 14,
-              fontSize: 12,
-              color: 'rgba(255,255,255,0.3)',
-              textAlign: 'center',
-              lineHeight: 1.8,
-            }}
-          >
-            📍 Sabaki Estate, Mombasa Road · 📞 0700 101 425
+          <div style={{ fontFamily: 'Nunito,sans-serif' }}>
+            {/* Contact block */}
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16,
+                padding: '18px 20px',
+                marginBottom: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'Fredoka One',cursive",
+                  fontSize: 17,
+                  color: '#FFD700',
+                  marginBottom: 12,
+                }}
+              >
+                🔬 Little Scientist Children&apos;s Science Park
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: 'rgba(255,255,255,0.6)',
+                  fontWeight: 700,
+                  lineHeight: 2,
+                }}
+              >
+                <div>📍 Sabaki Estate, Mombasa Road, Nairobi</div>
+                <div>
+                  📞{' '}
+                  <a href="tel:0700101425" style={{ color: '#7FFFD4', textDecoration: 'none' }}>
+                    0700 101 425
+                  </a>
+                  &nbsp;&nbsp;·&nbsp;&nbsp; 📧{' '}
+                  <a href="mailto:info@littlescientist.ke" style={{ color: '#7FFFD4', textDecoration: 'none' }}>
+                    info@littlescientist.ke
+                  </a>
+                </div>
+                <div>🌐 littlescientist.ke</div>
+              </div>
+            </div>
+
+            {/* Ticket validity notice */}
+            <div
+              style={{
+                background: 'rgba(255,215,0,0.07)',
+                border: '1px solid rgba(255,215,0,0.2)',
+                borderRadius: 16,
+                padding: '14px 20px',
+                marginBottom: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: 'rgba(255,215,0,0.8)',
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: '0.08em',
+                  marginBottom: 8,
+                }}
+              >
+                ⏰ Ticket validity
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: 'rgba(255,255,255,0.6)',
+                  fontWeight: 700,
+                  lineHeight: 1.8,
+                }}
+              >
+                Your ticket is valid only during your booked session time slot. Please arrive within your session window.{' '}
+                <strong style={{ color: '#FFD700' }}> Tickets cannot be used outside the booked session time.</strong>
+              </div>
+            </div>
+
+            {/* Disclaimers */}
+            <div
+              style={{
+                background: 'rgba(255,107,157,0.04)',
+                border: '1px solid rgba(255,107,157,0.12)',
+                borderRadius: 16,
+                padding: '16px 20px',
+                marginBottom: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: 'rgba(255,107,157,0.7)',
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: '0.08em',
+                  marginBottom: 10,
+                }}
+              >
+                Important notices
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'rgba(255,255,255,0.5)',
+                  fontWeight: 700,
+                  lineHeight: 2,
+                }}
+              >
+                <div>
+                  🎟️ Tickets are{' '}
+                  <strong style={{ color: 'rgba(255,255,255,0.75)' }}>non-refundable and non-transferable</strong>
+                </div>
+                <div>
+                  🚫 Little Scientist is a <strong style={{ color: 'rgba(255,255,255,0.75)' }}>drug and alcohol free</strong>{' '}
+                  environment
+                </div>
+                <div>
+                  📵 Little Scientist has <strong style={{ color: 'rgba(255,255,255,0.75)' }}>no social media handles</strong>{' '}
+                  or any other websites
+                </div>
+                <div>⚠️ Beware of fraudulent accounts or sites claiming to represent Little Scientist</div>
+              </div>
+            </div>
+
+            {/* Copyright */}
+            <div
+              style={{
+                fontSize: 11,
+                color: 'rgba(255,255,255,0.2)',
+                fontWeight: 700,
+                textAlign: 'center' as const,
+                lineHeight: 1.7,
+                paddingTop: 8,
+              }}
+            >
+              © {new Date().getFullYear()} Little Scientist Limited. All rights reserved.
+            </div>
           </div>
         </div>
       </div>
