@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type PriceTier = {
@@ -33,13 +34,22 @@ export default function PricingAdminPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    load()
+    void load()
   }, [])
 
   async function load() {
-    const { data } = await supabase.from('pricing_tiers').select('*').order('price_kes', { ascending: false })
+    setError('')
+    setLoading(true)
+    const { data, error } = await supabase.from('pricing_tiers').select('*').order('price_kes', { ascending: false })
+    if (error) {
+      setError(error.message || 'Failed to load pricing.')
+      setTiers([])
+      setLoading(false)
+      return
+    }
     setTiers((data || []) as PriceTier[])
     setLoading(false)
   }
@@ -47,7 +57,8 @@ export default function PricingAdminPage() {
   async function save(tier: PriceTier) {
     const newPrice = editing[tier.id] ?? tier.price_kes
     setSaving(tier.id)
-    await supabase
+    setError('')
+    const { error } = await supabase
       .from('pricing_tiers')
       .update({
         price_kes: newPrice,
@@ -56,25 +67,34 @@ export default function PricingAdminPage() {
       })
       .eq('id', tier.id)
     setSaving(null)
+
+    if (error) {
+      setError(error.message || 'Failed to save price.')
+      return
+    }
+
     setSaved(tier.id)
     setTimeout(() => setSaved(null), 2500)
-    load()
+    await load()
   }
 
-  const S: React.CSSProperties = {
-    display: 'block',
-    width: '100%',
-    background: 'rgba(255,255,255,0.07)',
-    border: '2px solid rgba(255,255,255,0.12)',
-    borderRadius: 12,
-    padding: '12px 16px',
-    color: '#fff',
-    fontSize: 22,
-    fontFamily: "'Fredoka One', cursive",
-    textAlign: 'center',
-  }
+  const inputStyle: React.CSSProperties = useMemo(
+    () => ({
+      display: 'block',
+      width: '100%',
+      background: 'rgba(255,255,255,0.07)',
+      border: '2px solid rgba(255,255,255,0.12)',
+      borderRadius: 12,
+      padding: '12px 16px',
+      color: '#fff',
+      fontSize: 22,
+      fontFamily: "'Fredoka One', cursive",
+      textAlign: 'center',
+    }),
+    [],
+  )
 
-  if (loading)
+  if (loading) {
     return (
       <div
         style={{
@@ -83,13 +103,14 @@ export default function PricingAdminPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#64748b',
+          color: '#94a3b8',
           fontFamily: 'Nunito,sans-serif',
         }}
       >
         Loading pricing...
       </div>
     )
+  }
 
   return (
     <>
@@ -99,8 +120,9 @@ export default function PricingAdminPage() {
         input:focus { outline: none; border-color: rgba(255,215,0,0.6) !important; box-shadow: 0 0 0 4px rgba(255,215,0,0.1); }
         input::-webkit-inner-spin-button { opacity: 1; }
       `}</style>
+
       <div style={{ minHeight: '100vh', background: '#060d1a', color: '#e2e8f0', fontFamily: 'Nunito,sans-serif', padding: 24 }}>
-        <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 16 }}>
           <div
             style={{
               fontFamily: "'Fredoka One',cursive",
@@ -118,8 +140,28 @@ export default function PricingAdminPage() {
           </div>
         </div>
 
+        {error && (
+          <div
+            style={{
+              maxWidth: 600,
+              marginBottom: 16,
+              background: 'rgba(255,80,80,0.08)',
+              border: '1px solid rgba(255,80,80,0.25)',
+              borderRadius: 14,
+              padding: '12px 14px',
+              color: 'rgba(255,180,180,0.9)',
+              fontWeight: 800,
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
         <div
           style={{
+            maxWidth: 600,
             background: 'rgba(255,215,0,0.07)',
             border: '1px solid rgba(255,215,0,0.18)',
             borderRadius: 14,
@@ -137,7 +179,7 @@ export default function PricingAdminPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 600 }}>
-          {tiers.map(tier => {
+          {tiers.map((tier) => {
             const currentPrice = editing[tier.id] ?? tier.price_kes
             const vat = vatBreakdown(currentPrice)
             const isDirty = editing[tier.id] !== undefined && editing[tier.id] !== tier.price_kes
@@ -179,7 +221,7 @@ export default function PricingAdminPage() {
                   )}
                 </div>
 
-                {!tier.free && (
+                {!tier.free ? (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end', marginBottom: 14 }}>
                       <div>
@@ -200,8 +242,8 @@ export default function PricingAdminPage() {
                           <input
                             type="number"
                             value={editing[tier.id] ?? tier.price_kes}
-                            onChange={e => setEditing(prev => ({ ...prev, [tier.id]: parseInt(e.target.value) || 0 }))}
-                            style={{ ...S, width: 140, border: '2px solid rgba(255,255,255,0.12)' }}
+                            onChange={(e) => setEditing((prev) => ({ ...prev, [tier.id]: parseInt(e.target.value) || 0 }))}
+                            style={{ ...inputStyle, width: 140, border: '2px solid rgba(255,255,255,0.12)' }}
                             min={0}
                             step={50}
                           />
@@ -286,9 +328,7 @@ export default function PricingAdminPage() {
                       </div>
                     )}
                   </>
-                )}
-
-                {tier.free && (
+                ) : (
                   <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
                     No charge — gate staff verify height on arrival. No ticket issued for this category.
                   </div>
