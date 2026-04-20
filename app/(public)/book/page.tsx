@@ -1,12 +1,19 @@
 'use client'
 import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
+import { computeBasket, type PriceTier } from '@/lib/pricing'
 
-const PRICING = {
+const DEFAULT_PRICING = {
   adult18PlusKes: 1000,
   child95cmTo17Kes: 800,
   childUnder95cmKes: 0,
 } as const
+
+type Pricing = {
+  adult18PlusKes: number
+  child95cmTo17Kes: number
+  childUnder95cmKes: number
+}
 const SLOT_LABELS: Record<string, string> = {
   '10:00-12:00': '10:00 AM – 12:00 PM',
   '12:00-14:00': '12:00 PM – 2:00 PM',
@@ -27,6 +34,7 @@ type Step = 'date' | 'slot' | 'count' | 'payment' | 'pending' | 'success'
 
 export default function BookPage() {
   const [step, setStep] = useState<Step>('date')
+  const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -43,6 +51,28 @@ export default function BookPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [bookingRef, setBookingRef] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const { data } = await supabase.from('pricing_tiers').select('key, price_kes, active').eq('active', true)
+        if (!alive) return
+        const tiers = (data || []) as { key: string; price_kes: number; active: boolean }[]
+        const adult = tiers.find(t => t.key === 'adult')?.price_kes
+        const child = tiers.find(t => t.key === 'child')?.price_kes
+        const infant = tiers.find(t => t.key === 'infant')?.price_kes
+        setPricing({
+          adult18PlusKes: typeof adult === 'number' ? adult : DEFAULT_PRICING.adult18PlusKes,
+          child95cmTo17Kes: typeof child === 'number' ? child : DEFAULT_PRICING.child95cmTo17Kes,
+          childUnder95cmKes: typeof infant === 'number' ? infant : DEFAULT_PRICING.childUnder95cmKes,
+        })
+      } catch {}
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const calendarDays = (() => {
     const { year, month } = currentMonth
@@ -113,7 +143,13 @@ export default function BookPage() {
     if (step === 'pending') return pollStatus()
   }, [step, pollStatus])
 
-  const total = adults * PRICING.adult18PlusKes + childrenPaid * PRICING.child95cmTo17Kes
+  const total = adults * pricing.adult18PlusKes + childrenPaid * pricing.child95cmTo17Kes
+  const tiersForBasket: PriceTier[] = [
+    { key: 'adult', label: 'Adults (18+)', sublabel: '18 years and above', priceInclVat: pricing.adult18PlusKes, free: false },
+    { key: 'child', label: 'Children (95cm – 17 yrs)', sublabel: '95cm height to 17 years', priceInclVat: pricing.child95cmTo17Kes, free: false },
+    { key: 'infant', label: 'Under 95cm', sublabel: 'Height under 95cm — FREE entry', priceInclVat: 0, free: true },
+  ]
+  const basket = computeBasket(adults, childrenPaid, tiersForBasket)
   const monthName = new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-KE', {
     month: 'long',
     year: 'numeric',
@@ -653,7 +689,7 @@ export default function BookPage() {
                 <div className="ctr">
                   <div className="ctr-info">
                     <h3>🧑 Adults (18+)</h3>
-                    <p style={{ color: '#FF6B9D' }}>KES {PRICING.adult18PlusKes.toLocaleString()}</p>
+                    <p style={{ color: '#FF6B9D' }}>KES {pricing.adult18PlusKes.toLocaleString()}</p>
                   </div>
                   <div className="ctr-ctrl">
                     <button className="ctr-btn ba" onClick={() => setAdults(Math.max(1, adults - 1))}>
@@ -669,7 +705,7 @@ export default function BookPage() {
                 <div className="ctr">
                   <div className="ctr-info">
                     <h3>👧 Children 95cm–17yrs</h3>
-                    <p style={{ color: '#7FFFD4' }}>KES {PRICING.child95cmTo17Kes.toLocaleString()}</p>
+                    <p style={{ color: '#7FFFD4' }}>KES {pricing.child95cmTo17Kes.toLocaleString()}</p>
                   </div>
                   <div className="ctr-ctrl">
                     <button className="ctr-btn bc" onClick={() => setChildrenPaid(Math.max(0, childrenPaid - 1))}>
@@ -721,7 +757,7 @@ export default function BookPage() {
                 <p className="ssub">You&apos;ll get a payment prompt on your phone. Enter your PIN and you&apos;re in!</p>
 
                 <div className="sum">
-                  <h4>Your booking</h4>
+                  <h4>Booking summary</h4>
                   <div className="sum-row">
                     <span>📅 Date</span>
                     <span>
@@ -732,21 +768,44 @@ export default function BookPage() {
                     <span>🕙 Time</span>
                     <span>{SLOT_LABELS[selectedSession?.time_slot || '10:00-12:00']}</span>
                   </div>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', margin: '10px 0' }} />
                   <div className="sum-row">
                     <span>🧑 Adults × {adults}</span>
-                    <span>KES {(adults * PRICING.adult18PlusKes).toLocaleString()}</span>
+                    <span>KES {basket.adultTotal.toLocaleString()}</span>
                   </div>
                   <div className="sum-row">
                     <span>👧 Children 95cm–17yrs × {childrenPaid}</span>
-                    <span>KES {(childrenPaid * PRICING.child95cmTo17Kes).toLocaleString()}</span>
+                    <span>KES {basket.childTotal.toLocaleString()}</span>
                   </div>
                   <div className="sum-row">
                     <span>🧸 Under 95cm (FREE) × {childrenFreeUnder95}</span>
                     <span>KES 0</span>
                   </div>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', margin: '10px 0' }} />
+                  <div className="sum-row" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                    <span>Entry fees (excl. VAT)</span>
+                    <span>KES {basket.totalExclFormatted}</span>
+                  </div>
+                  <div className="sum-row" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                    <span>VAT @ 16%</span>
+                    <span>KES {basket.totalVatFormatted}</span>
+                  </div>
                   <div className="sum-row b">
                     <span>Total</span>
-                    <span>KES {total.toLocaleString()}</span>
+                    <span>KES {basket.grandTotalFormatted}</span>
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: '8px 12px',
+                      background: 'rgba(127,255,212,0.06)',
+                      borderRadius: 10,
+                      fontSize: 11,
+                      color: 'rgba(255,255,255,0.3)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    🧾 VAT-inclusive prices. KRA ETR receipt issued on payment confirmation.
                   </div>
                 </div>
 
@@ -761,7 +820,7 @@ export default function BookPage() {
 
                 {error && <div className="err">{error}</div>}
                 <button className="btn-go" onClick={handlePayment} disabled={loading}>
-                  {loading ? '🔄 Sending prompt...' : `🔬 Pay KES ${total.toLocaleString()} — Get my tickets →`}
+                  {loading ? '🔄 Sending prompt...' : `🔬 Pay KES ${basket.grandTotalFormatted} — Get my tickets →`}
                 </button>
                 <button className="btn-ghost" onClick={() => setStep('count')}>
                   ← Change visitors

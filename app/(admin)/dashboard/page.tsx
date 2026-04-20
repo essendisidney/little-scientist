@@ -36,7 +36,7 @@ function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [kpis, setKpis] = useState({ ticketRev: 0, visitors: 0, bookings: 0 })
-  const [sessions, setSessions] = useState<{ time_slot: string; capacity: number; booked_count: number }[]>([])
+  const [sessions, setSessions] = useState<{ id?: string; time_slot: string; capacity: number; booked_count: number; is_blocked?: boolean }[]>([])
   const [recent, setRecent] = useState<
     {
       booking_ref: string
@@ -61,7 +61,7 @@ export default function DashboardPage() {
           .from('bookings')
           .select('total_amount_kes, adult_count, child_count')
           .eq('payment_status', 'paid'),
-        supabase.from('sessions').select('time_slot, capacity, booked_count').eq('session_date', today),
+        supabase.from('sessions').select('id, time_slot, capacity, booked_count, is_blocked').eq('session_date', today),
         supabase
           .from('bookings')
           .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status')
@@ -87,6 +87,15 @@ export default function DashboardPage() {
     '10:00-12:00': '10am – 12pm',
     '12:00-14:00': '12pm – 2pm',
     '14:00-16:00': '2pm – 4pm',
+  }
+
+  async function toggleBlock(sessionId: string, nextBlocked: boolean) {
+    await supabase.from('sessions').update({ is_blocked: nextBlocked }).eq('id', sessionId)
+    const { data } = await supabase
+      .from('sessions')
+      .select('id, time_slot, capacity, booked_count, is_blocked')
+      .eq('session_date', today)
+    setSessions((data || []) as typeof sessions)
   }
 
   async function exportOverview() {
@@ -267,9 +276,30 @@ export default function DashboardPage() {
                   <div key={s.time_slot} style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
                       <span>{SLOT_LABELS[s.time_slot] || s.time_slot}</span>
-                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>
-                        {s.booked_count}/{s.capacity} · {pct}%
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>
+                          {s.booked_count}/{s.capacity} · {pct}%{s.is_blocked ? ' · blocked' : ''}
+                        </span>
+                        {s.id && (
+                          <button
+                            onClick={() => toggleBlock(s.id as string, !s.is_blocked)}
+                            style={{
+                              background: s.is_blocked ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              color: s.is_blocked ? '#4ade80' : '#f87171',
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 900,
+                              fontFamily: 'Nunito, sans-serif',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {s.is_blocked ? 'Unblock' : 'Block'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 4, height: 8 }}>
                       <div

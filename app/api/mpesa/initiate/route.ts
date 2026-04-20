@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { initiateSTKPush } from '@/lib/mpesa'
 
-const ADULT_PRICE = 1000
-const CHILD_PRICE = 800
+const DEFAULT_ADULT_PRICE = 1000
+const DEFAULT_CHILD_PRICE = 800
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,7 +31,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cannot book more than 14 days ahead' }, { status: 400 })
     }
 
-    const total = adultCount * ADULT_PRICE + childCount * CHILD_PRICE
+    const { data: tiers } = await supabaseAdmin
+      .from('pricing_tiers')
+      .select('key, price_kes, active')
+      .eq('active', true)
+      .in('key', ['adult', 'child'])
+
+    const adultPrice =
+      (tiers || []).find((t: any) => t.key === 'adult')?.price_kes ?? DEFAULT_ADULT_PRICE
+    const childPrice =
+      (tiers || []).find((t: any) => t.key === 'child')?.price_kes ?? DEFAULT_CHILD_PRICE
+
+    const total = adultCount * Number(adultPrice) + childCount * Number(childPrice)
 
     const { data: booking, error: bErr } = await supabaseAdmin
       .from('bookings')

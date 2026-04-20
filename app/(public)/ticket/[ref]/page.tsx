@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import QRCode from 'react-qr-code'
+import { computeBasket } from '@/lib/pricing'
 
 type Booking = {
   id: string
@@ -98,6 +99,7 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
     )
 
   const session = booking?.sessions as { session_date: string; time_slot: string }
+  const basket = booking ? computeBasket(booking.adult_count, booking.child_count) : null
 
   return (
     <>
@@ -169,58 +171,162 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
         </div>
 
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 16px' }}>
-          {/* Booking info */}
-          <div
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 16,
-              padding: 20,
-              marginBottom: 16,
-            }}
-          >
+          {/* Booking info + VAT receipt */}
+          {booking && basket && (
             <div
               style={{
-                fontSize: 11,
-                color: 'rgba(255,255,255,0.4)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                marginBottom: 8,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 16,
+                fontFamily: 'Nunito, sans-serif',
               }}
             >
-              Booking confirmed ✓
-            </div>
-            <div
-              style={{
-                fontWeight: 900,
-                fontSize: 24,
-                color: '#ffd700',
-                marginBottom: 14,
-                fontFamily: 'monospace',
-                letterSpacing: '0.1em',
-              }}
-            >
-              {booking?.booking_ref}
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 2 }}>
-              {booking?.booker_name && <div>👤 {booking.booker_name}</div>}
-              <div>
-                📅{' '}
-                {new Date(session.session_date).toLocaleDateString('en-KE', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'rgba(255,255,255,0.4)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: 4,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Booking confirmed ✓
+                  </div>
+                  <div style={{ fontFamily: "'Fredoka One',cursive", fontSize: 24, color: '#FFD700', letterSpacing: '0.1em' }}>
+                    {booking.booking_ref}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    background: 'rgba(46,204,113,0.12)',
+                    border: '1px solid rgba(46,204,113,0.3)',
+                    borderRadius: 8,
+                    padding: '4px 12px',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: '#2ecc71',
+                  }}
+                >
+                  PAID
+                </div>
               </div>
-              <div>🕙 {SLOT_LABELS[session.time_slot] || session.time_slot}</div>
-              <div>
-                👨‍👩‍👧 {booking?.adult_count} adult{(booking?.adult_count || 0) > 1 ? 's' : ''} · {booking?.child_count}{' '}
-                child{(booking?.child_count || 0) > 1 ? 'ren' : ''}
+
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 2, marginBottom: 16 }}>
+                {booking.booker_name && <div>👤 {booking.booker_name}</div>}
+                <div>
+                  📅{' '}
+                  {new Date(session.session_date).toLocaleDateString('en-KE', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </div>
+                <div>🕙 {SLOT_LABELS[session.time_slot] || session.time_slot}</div>
+                <div>
+                  👨‍👩‍👧 {booking.adult_count} adult{booking.adult_count > 1 ? 's' : ''} · {booking.child_count} child
+                  {booking.child_count > 1 ? 'ren' : ''}
+                </div>
               </div>
-              <div style={{ color: '#ff7235', fontWeight: 700 }}>💳 KES {booking?.total_amount_kes.toLocaleString()}</div>
+
+              <div
+                style={{
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'rgba(255,255,255,0.35)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    fontWeight: 800,
+                    marginBottom: 12,
+                  }}
+                >
+                  🧾 Receipt
+                </div>
+
+                {[
+                  { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
+                  { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
+                ]
+                  .filter(i => i.amount > 0)
+                  .map(item => (
+                    <div
+                      key={item.label}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 13,
+                        color: 'rgba(255,255,255,0.65)',
+                        marginBottom: 6,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <span>KES {item.amount.toLocaleString()}</span>
+                    </div>
+                  ))}
+
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 8, paddingTop: 8 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      color: 'rgba(255,255,255,0.35)',
+                      marginBottom: 4,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>Entry fees (excl. VAT)</span>
+                    <span>KES {basket.totalExclFormatted}</span>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      color: 'rgba(255,255,255,0.35)',
+                      marginBottom: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>VAT @ 16%</span>
+                    <span>KES {basket.totalVatFormatted}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 900 }}>
+                    <span style={{ color: '#fff' }}>Total paid</span>
+                    <span style={{ color: '#FFD700' }}>KES {basket.grandTotalFormatted}</span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 12,
+                    fontSize: 11,
+                    color: 'rgba(255,255,255,0.25)',
+                    fontWeight: 700,
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    paddingTop: 10,
+                  }}
+                >
+                  VAT Reg. No: [Little Scientist VAT Number] · KRA ETR Receipt: {booking.booking_ref}
+                  <br />
+                  Prices are VAT-inclusive at 16% as required by the Kenya Revenue Authority.
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 16, textAlign: 'center' }}>
             Show each QR code to gate staff. Each QR works <strong style={{ color: '#fff' }}>once only</strong>.

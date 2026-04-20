@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-type SessionPreference = 'exclusive' | 'non-exclusive'
+type SessionType = 'exclusive' | 'non-exclusive'
 
 export default function SchoolsPage() {
   const [schoolName, setSchoolName] = useState('')
@@ -11,11 +11,18 @@ export default function SchoolsPage() {
   const [contactEmail, setContactEmail] = useState('')
   const [studentCount, setStudentCount] = useState<number>(30)
   const [preferredDate, setPreferredDate] = useState('')
-  const [sessionPreference, setSessionPreference] = useState<SessionPreference>('non-exclusive')
+  const [sessionType, setSessionType] = useState<SessionType>('non-exclusive')
   const [specialRequirements, setSpecialRequirements] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [enquiryRef, setEnquiryRef] = useState<string>('')
+
+  const minDate = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().split('T')[0]
+  })()
 
   const canSubmit = useMemo(() => {
     return (
@@ -24,11 +31,11 @@ export default function SchoolsPage() {
       contactPhone.trim() &&
       contactEmail.trim() &&
       Number.isFinite(studentCount) &&
-      studentCount > 0 &&
+      studentCount >= 10 &&
       preferredDate &&
-      sessionPreference
+      sessionType
     )
-  }, [schoolName, contactName, contactPhone, contactEmail, studentCount, preferredDate, sessionPreference])
+  }, [schoolName, contactName, contactPhone, contactEmail, studentCount, preferredDate, sessionType])
 
   async function submit() {
     setError('')
@@ -48,12 +55,13 @@ export default function SchoolsPage() {
           contactEmail,
           studentCount,
           preferredDate,
-          sessionPreference,
+          sessionType,
           specialRequirements,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to submit enquiry')
+      setEnquiryRef(String(data.enquiryRef || ''))
       setSuccess(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -132,6 +140,20 @@ export default function SchoolsPage() {
           box-shadow:0 0 0 5px rgba(255,107,157,0.12);
         }
         .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .scard{
+          background:rgba(255,255,255,0.04);
+          border:2px solid rgba(255,255,255,0.10);
+          border-radius:20px;
+          padding:18px 18px;
+          cursor:pointer;
+          transition:all .2s cubic-bezier(0.34,1.56,0.64,1);
+          text-align:left;
+        }
+        .scard:hover{transform:translateY(-4px);border-color:rgba(255,215,0,0.35);background:rgba(255,255,255,0.06)}
+        .scard.on{border-color:rgba(255,215,0,0.55);box-shadow:0 10px 36px rgba(255,215,0,0.08)}
+        .scard h3{margin:0 0 6px;font-family:'Fredoka One',cursive;font-size:18px}
+        .scard p{margin:0;color:rgba(255,255,255,0.55);font-size:13px;line-height:1.6;font-weight:700}
         .cta{
           display:block;width:100%;
           background:linear-gradient(135deg,#FF4080,#FF8C00);
@@ -158,10 +180,22 @@ export default function SchoolsPage() {
           -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
         }
         .ok p{color:rgba(255,255,255,0.55);font-size:15px;line-height:1.7;margin:0}
+        .ref{
+          margin:18px auto 0;
+          max-width:420px;
+          background:rgba(255,215,0,0.08);
+          border:2px solid rgba(255,215,0,0.25);
+          border-radius:18px;
+          padding:14px 18px;
+          text-align:left;
+        }
+        .ref .k{font-size:11px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.1em;font-weight:800;margin-bottom:6px}
+        .ref .v{font-family:'Fredoka One',cursive;font-size:26px;color:#FFD700;letter-spacing:0.12em}
         @media(max-width:640px){
           .card{padding:28px 20px}
           .outer{padding:24px 16px 60px}
           .row{grid-template-columns:1fr}
+          .cards{grid-template-columns:1fr}
         }
       `}</style>
 
@@ -188,7 +222,7 @@ export default function SchoolsPage() {
                   </div>
                   <div>
                     <label>Contact phone *</label>
-                    <input className="inp" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="e.g. 0700 101 425" />
+                    <input className="inp" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="e.g. 0700 101 425" type="tel" />
                   </div>
                 </div>
 
@@ -203,20 +237,34 @@ export default function SchoolsPage() {
                       value={String(studentCount)}
                       onChange={e => setStudentCount(Number(e.target.value))}
                       type="number"
-                      min={1}
+                      min={10}
                     />
                   </div>
                   <div>
                     <label>Preferred date *</label>
-                    <input className="inp" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} type="date" />
+                    <input className="inp" value={preferredDate} onChange={e => setPreferredDate(e.target.value)} type="date" min={minDate} />
                   </div>
                 </div>
 
-                <label>Session preference *</label>
-                <select className="sel" value={sessionPreference} onChange={e => setSessionPreference(e.target.value as SessionPreference)}>
-                  <option value="exclusive">Exclusive (private session)</option>
-                  <option value="non-exclusive">Non-exclusive (shared session)</option>
-                </select>
+                <label>Session type *</label>
+                <div className="cards">
+                  <button
+                    type="button"
+                    className={`scard ${sessionType === 'exclusive' ? 'on' : ''}`}
+                    onClick={() => setSessionType('exclusive')}
+                  >
+                    <h3>⭐ Exclusive</h3>
+                    <p>We have the park to ourselves.</p>
+                  </button>
+                  <button
+                    type="button"
+                    className={`scard ${sessionType === 'non-exclusive' ? 'on' : ''}`}
+                    onClick={() => setSessionType('non-exclusive')}
+                  >
+                    <h3>🌈 Non-Exclusive</h3>
+                    <p>Other groups may be present.</p>
+                  </button>
+                </div>
 
                 <label>Any special requirements</label>
                 <textarea
@@ -241,6 +289,12 @@ export default function SchoolsPage() {
                   <br />
                   Our team will get back to you shortly.
                 </p>
+                {enquiryRef && (
+                  <div className="ref">
+                    <div className="k">Reference</div>
+                    <div className="v">{enquiryRef}</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
