@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
+import { sessionOpenSpots } from '@/lib/session-capacity'
 
 type Tab = 'overview' | 'accounting' | 'visitors'
 
@@ -89,7 +90,10 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [selectedDate, setSelectedDate] = useState(today)
   const [kpis, setKpis] = useState({ ticketRev: 0, visitors: 0, bookings: 0 })
-  const [sessions, setSessions] = useState<{ id?: string; time_slot: string; capacity: number; booked_count: number; is_blocked?: boolean }[]>([])
+  const [sessions, setSessions] = useState<
+    { id?: string; time_slot: string; capacity: number; booked_count: number; held_count?: number; is_blocked?: boolean }[]
+  >([])
+  const [slotEdits, setSlotEdits] = useState<Record<string, { capacity: string; held: string }>>({})
   const [dayBookings, setDayBookings] = useState<
     {
       booking_ref: string
@@ -133,7 +137,7 @@ export default function DashboardPage() {
 
       const sRes = await supabase
         .from('sessions')
-        .select('id, time_slot, capacity, booked_count, is_blocked')
+        .select('id, time_slot, capacity, booked_count, held_count, is_blocked')
         .eq('session_date', selectedDate)
         .order('time_slot')
       const sessionIds = ((sRes.data || []) as { id: string }[]).map(s => s.id)
@@ -166,6 +170,7 @@ export default function DashboardPage() {
         bookings: paid.length,
       })
       setSessions((sRes.data || []) as typeof sessions)
+      setSlotEdits({})
       setDayBookings((dayRes.data || []) as typeof dayBookings)
       setRecent((rRes.data || []) as typeof recent)
       setTrialBalance((tbRes.data || []) as typeof trialBalance)
@@ -175,6 +180,11 @@ export default function DashboardPage() {
     load()
   }, [selectedDate])
 
+  function slotEdit(s: { id?: string; time_slot: string; capacity: number; held_count?: number }) {
+    const key = s.id || s.time_slot
+    return slotEdits[key] ?? { capacity: String(s.capacity ?? 100), held: String(s.held_count ?? 0) }
+  }
+
   async function toggleBlock(sessionId: string, nextBlocked: boolean) {
     setActionError('')
     setBlockingId(sessionId)
@@ -182,10 +192,10 @@ export default function DashboardPage() {
       .from('sessions')
       .update({
         is_blocked: nextBlocked,
-        block_reason: nextBlocked ? 'Blocked by admin' : null,
+        block_reason: nextBlocked ? 'Slot closed by admin' : null,
       })
       .eq('id', sessionId)
-      .select('id, time_slot, capacity, booked_count, is_blocked')
+      .select('id, time_slot, capacity, booked_count, held_count, is_blocked')
       .single()
 
     if (error || !data) {
@@ -194,7 +204,46 @@ export default function DashboardPage() {
       return
     }
 
-    setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, is_blocked: nextBlocked } : s)))
+    setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, ...data } : s)))
+    setBlockingId(null)
+  }
+
+  async function saveSlotLimits(sessionId: string) {
+    const session = sessions.find(s => s.id === sessionId)
+    if (!session) return
+    const edit = slotEdit(session)
+    const capacity = Math.max(0, Math.min(500, Math.floor(Number(edit.capacity))))
+    const held = Math.max(0, Math.min(500, Math.floor(Number(edit.held))))
+    if (!Number.isFinite(capacity) || !Number.isFinite(held)) {
+      setActionError('Enter whole numbers for capacity and held tickets.')
+      return
+    }
+
+    setActionError('')
+    setBlockingId(sessionId)
+    const { data, error } = await supabase
+      .from('sessions')
+      .update({
+        capacity,
+        held_count: held,
+        block_reason: held > 0 ? `Held ${held} ticket${held === 1 ? '' : 's'} by admin` : session.is_blocked ? 'Slot closed by admin' : null,
+      })
+      .eq('id', sessionId)
+      .select('id, time_slot, capacity, booked_count, held_count, is_blocked')
+      .single()
+
+    if (error || !data) {
+      setActionError(error?.message || 'Could not save slot limits. Try signing out and back in.')
+      setBlockingId(null)
+      return
+    }
+
+    setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, ...data } : s)))
+    setSlotEdits(prev => {
+      const next = { ...prev }
+      delete next[sessionId]
+      return next
+    })
     setBlockingId(null)
   }
 
@@ -357,7 +406,7 @@ export default function DashboardPage() {
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
                   {dateLoading
                     ? 'Loading this day’s bookings…'
-                    : 'Pick day / month / year, then use Next to walk through upcoming bookings.'}
+                    : 'Hold some tickets (e.g. 5 of 100), change capacity, or close the whole slot.'}
                 </div>
                 {actionError && (
                   <div style={{ fontSize: 12, color: '#f87171', marginTop: 8, fontWeight: 700 }}>{actionError}</div>
@@ -418,49 +467,124 @@ export default function DashboardPage() {
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No sessions for this date yet.</div>
             ) : (
               sessions.map(s => {
-                const pct = s.capacity > 0 ? Math.round((s.booked_count / s.capacity) * 100) : 0
+                const held = s.held_count || 0
+                const open = sessionOpenSpots(s)
+                const used = Math.min(s.capacity, (s.booked_count || 0) + held)
+                const pct = s.capacity > 0 ? Math.round((used / s.capacity) * 100) : s.is_blocked ? 100 : 0
+                const edit = slotEdit(s)
+                const dirty =
+                  Number(edit.capacity) !== Number(s.capacity) || Number(edit.held) !== Number(held)
+                const inputStyle: CSSProperties = {
+                  width: 72,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                  color: '#fff',
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  fontWeight: 800,
+                  fontFamily: 'Nunito, sans-serif',
+                  fontSize: 14,
+                }
                 return (
-                  <div key={s.time_slot} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-                      <span>{SLOT_LABELS[s.time_slot] || s.time_slot}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>
-                          {s.booked_count}/{s.capacity} · {pct}%{s.is_blocked ? ' · blocked' : ''}
-                        </span>
-                        {s.id && (
-                          <button
-                            type="button"
-                            disabled={blockingId === s.id}
-                            onClick={() => toggleBlock(s.id as string, !s.is_blocked)}
-                            style={{
-                              background: s.is_blocked ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-                              border: '1px solid rgba(255,255,255,0.12)',
-                              color: s.is_blocked ? '#4ade80' : '#f87171',
-                              padding: '6px 10px',
-                              borderRadius: 8,
-                              cursor: blockingId === s.id ? 'wait' : 'pointer',
-                              fontSize: 12,
-                              fontWeight: 900,
-                              fontFamily: 'Nunito, sans-serif',
-                              whiteSpace: 'nowrap',
-                              opacity: blockingId === s.id ? 0.6 : 1,
-                            }}
-                          >
-                            {blockingId === s.id ? 'Saving…' : s.is_blocked ? 'Unblock' : 'Block'}
-                          </button>
-                        )}
+                  <div
+                    key={s.time_slot}
+                    style={{
+                      marginBottom: 16,
+                      padding: 14,
+                      borderRadius: 12,
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: s.is_blocked ? 'rgba(248,113,113,0.06)' : 'rgba(255,255,255,0.03)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, marginBottom: 8, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 800 }}>{SLOT_LABELS[s.time_slot] || s.time_slot}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
+                          Booked {s.booked_count} · Held {held} · Open {open} of {s.capacity}
+                          {s.is_blocked ? ' · slot closed' : ''}
+                        </div>
                       </div>
+                      {s.id && (
+                        <button
+                          type="button"
+                          disabled={blockingId === s.id}
+                          onClick={() => toggleBlock(s.id as string, !s.is_blocked)}
+                          style={{
+                            background: s.is_blocked ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            color: s.is_blocked ? '#4ade80' : '#f87171',
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            cursor: blockingId === s.id ? 'wait' : 'pointer',
+                            fontSize: 12,
+                            fontWeight: 900,
+                            fontFamily: 'Nunito, sans-serif',
+                            whiteSpace: 'nowrap',
+                            opacity: blockingId === s.id ? 0.6 : 1,
+                          }}
+                        >
+                          {blockingId === s.id && !dirty ? 'Saving…' : s.is_blocked ? 'Open slot' : 'Close slot'}
+                        </button>
+                      )}
                     </div>
-                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 4, height: 8 }}>
+                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 4, height: 8, marginBottom: 12 }}>
                       <div
                         style={{
-                          background: pct > 80 ? '#f87171' : pct > 50 ? '#ffd700' : '#4ade80',
+                          background: s.is_blocked || pct > 80 ? '#f87171' : pct > 50 ? '#ffd700' : '#4ade80',
                           height: '100%',
-                          width: `${pct}%`,
+                          width: `${Math.min(100, pct)}%`,
                           borderRadius: 4,
                           transition: 'width 0.3s',
                         }}
                       />
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'end' }}>
+                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>
+                        Capacity
+                        <input
+                          type="number"
+                          min={0}
+                          max={500}
+                          value={edit.capacity}
+                          onChange={e =>
+                            setSlotEdits(prev => ({
+                              ...prev,
+                              [s.id || s.time_slot]: { ...edit, capacity: e.target.value },
+                            }))
+                          }
+                          style={{ ...inputStyle, display: 'block', marginTop: 6 }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>
+                        Hold tickets
+                        <input
+                          type="number"
+                          min={0}
+                          max={500}
+                          value={edit.held}
+                          onChange={e =>
+                            setSlotEdits(prev => ({
+                              ...prev,
+                              [s.id || s.time_slot]: { ...edit, held: e.target.value },
+                            }))
+                          }
+                          style={{ ...inputStyle, display: 'block', marginTop: 6 }}
+                        />
+                      </label>
+                      {s.id && (
+                        <button
+                          type="button"
+                          disabled={!dirty || blockingId === s.id}
+                          onClick={() => saveSlotLimits(s.id as string)}
+                          style={{
+                            ...navBtnStyle,
+                            color: dirty ? '#ffd700' : 'rgba(255,255,255,0.35)',
+                            cursor: !dirty || blockingId === s.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {blockingId === s.id && dirty ? 'Saving…' : 'Save limits'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )

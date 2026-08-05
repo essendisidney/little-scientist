@@ -17,6 +17,7 @@ type SessionRow = {
   time_slot: string
   capacity: number
   booked_count: number
+  held_count?: number
   is_blocked: boolean
 }
 
@@ -27,7 +28,7 @@ function isDateKey(s: unknown): s is string {
 async function ensureOneDate(sessionDate: string) {
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from('sessions')
-    .select('id, session_date, time_slot, capacity, booked_count, is_blocked')
+    .select('id, session_date, time_slot, capacity, booked_count, held_count, is_blocked')
     .eq('session_date', sessionDate)
 
   if (existingErr) throw new Error('Failed to check sessions.')
@@ -43,6 +44,7 @@ async function ensureOneDate(sessionDate: string) {
       time_slot: slot,
       capacity: 100,
       booked_count: 0,
+      held_count: 0,
       is_blocked: false,
     }))
     const { error: insErr } = await supabaseAdmin.from('sessions').insert(toInsert)

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react'
+import { sessionOpenSpots } from '@/lib/session-capacity'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { computeBasket, BIRTHDAY_PRICING, BIRTHDAY_FOOD_NOTICE, type PriceTier } from '@/lib/pricing'
@@ -56,6 +57,7 @@ type Session = {
   time_slot: string
   capacity: number
   booked_count: number
+  held_count?: number
   is_blocked: boolean
 }
 type Step = 'date' | 'slot' | 'count' | 'payment' | 'pending' | 'success'
@@ -275,7 +277,7 @@ export default function BookPage() {
     // Fast path: read existing rows from Supabase (no server ensure round-trip).
     const { data } = await supabase
       .from('sessions')
-      .select('id, session_date, time_slot, capacity, booked_count, is_blocked')
+      .select('id, session_date, time_slot, capacity, booked_count, held_count, is_blocked')
       .eq('session_date', dateStr)
     let rows = (data || []) as Session[]
     const found = new Set(rows.map(r => r.time_slot))
@@ -297,7 +299,7 @@ export default function BookPage() {
     if (!Array.isArray(rows) || rows.length === 0) {
       const { data: data2 } = await supabase
         .from('sessions')
-        .select('id, session_date, time_slot, capacity, booked_count, is_blocked')
+        .select('id, session_date, time_slot, capacity, booked_count, held_count, is_blocked')
         .eq('session_date', dateStr)
       rows = (data2 || []) as Session[]
     }
@@ -325,7 +327,7 @@ export default function BookPage() {
         // One range query first — usually enough after days are seeded.
         const { data } = await supabase
           .from('sessions')
-          .select('id, session_date, time_slot, capacity, booked_count, is_blocked')
+          .select('id, session_date, time_slot, capacity, booked_count, held_count, is_blocked')
           .gte('session_date', dates[0])
           .lte('session_date', dates[dates.length - 1])
 
@@ -399,7 +401,7 @@ export default function BookPage() {
     adults * activePricing.adult18PlusKes +
     childrenPaid * activePricing.child95cmTo17Kes +
     (visitType === 'birthday' ? childrenFreeUnder95 * activePricing.childUnder95cmKes : 0)
-  const spotsLeft = selectedSession ? Math.max(0, selectedSession.capacity - selectedSession.booked_count) : 0
+  const spotsLeft = selectedSession ? sessionOpenSpots(selectedSession) : 0
   const schoolHeadcount = Math.max(0, studentCount) + Math.max(0, staffCount)
   const schoolTooLarge = visitType === 'school' && schoolHeadcount > spotsLeft
   /** Birthday & school use dedicated enquiry pages; keep enquiry path for any residual in-wizard use. */
@@ -1229,7 +1231,7 @@ export default function BookPage() {
                   ) : (
                   BOOKABLE_SLOTS.map((slot, idx) => {
                     const session = sessions.find(s => s.time_slot === slot) || null
-                    const available = session ? session.capacity - session.booked_count : 0
+                    const available = session ? sessionOpenSpots(session) : 0
                     const now = new Date()
                     const todayKey = toLocalDateKey(now)
                     const isToday = selectedDate === todayKey

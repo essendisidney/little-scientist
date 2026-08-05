@@ -4,6 +4,7 @@ import { initiateSTKPush } from '@/lib/mpesa'
 import { normalizeParty, partyHeadcount, validatePaidCheckout } from '@/lib/booking-party'
 import { parseVisitType } from '@/lib/visit-type'
 import { BIRTHDAY_PRICING } from '@/lib/pricing'
+import { sessionOpenSpots } from '@/lib/session-capacity'
 
 const DEFAULT_ADULT_PRICE = 1000
 const DEFAULT_CHILD_PRICE = 800
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
     if (session.is_blocked) return NextResponse.json({ error: 'This session is not available' }, { status: 409 })
-    if (session.booked_count + partyHeadcount(party) > session.capacity) {
+    if (partyHeadcount(party) > sessionOpenSpots(session)) {
       return NextResponse.json({ error: 'Not enough spots in this session' }, { status: 409 })
     }
 
