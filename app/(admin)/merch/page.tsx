@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 type Variant = {
   id: string
@@ -17,6 +17,20 @@ type Product = {
   category: string
   is_active: boolean
   merch_variants: Variant[]
+}
+
+const fieldStyle: CSSProperties = {
+  width: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 10,
+  padding: '10px 12px',
+  color: '#fff',
+  fontWeight: 700,
+  fontFamily: 'Nunito, sans-serif',
+  fontSize: 13,
 }
 
 export default function MerchPage() {
@@ -56,7 +70,6 @@ export default function MerchPage() {
   }, [])
 
   useEffect(() => {
-    // Seed edit fields from loaded data without clobbering user edits.
     setEdits(prev => {
       const next = { ...prev }
       for (const p of products) {
@@ -130,9 +143,11 @@ export default function MerchPage() {
             ? x
             : {
                 ...x,
-                merch_variants: x.merch_variants.map(vx => (vx.id === v.id ? { ...vx, price_kes: nextPrice, stock_qty: nextStock } : vx)),
-              }
-        )
+                merch_variants: x.merch_variants.map(vx =>
+                  vx.id === v.id ? { ...vx, price_kes: nextPrice, stock_qty: nextStock } : vx,
+                ),
+              },
+        ),
       )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update variant')
@@ -141,12 +156,47 @@ export default function MerchPage() {
 
   return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap');`}</style>
-      <div style={{ minHeight: '100vh', background: '#060d1a', color: '#e2e8f0', fontFamily: 'Nunito, sans-serif' }}>
-        <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap');
+        .merch-page, .merch-page * { box-sizing: border-box; }
+        .merch-add-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        @media (min-width: 900px) {
+          .merch-add-grid {
+            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.7fr) auto;
+            align-items: center;
+          }
+        }
+        .merch-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .merch-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+        .merch-table th, .merch-table td {
+          padding: 10px 12px;
+          text-align: left;
+          vertical-align: middle;
+          overflow: hidden;
+        }
+        .merch-table th {
+          color: rgba(255,255,255,0.4);
+          font-size: 11px;
+          text-transform: uppercase;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+          background: rgba(255,255,255,0.04);
+        }
+        .merch-table input[type='number'] {
+          width: 100%;
+          max-width: 110px;
+          min-width: 0;
+        }
+      `}</style>
+      <div className="merch-page" style={{ minHeight: '100vh', background: '#060d1a', color: '#e2e8f0', fontFamily: 'Nunito, sans-serif' }}>
+        <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 900 }}>🧪 Merch Inventory</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 20, fontWeight: 900 }}>Merch Inventory</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>
                 Manage science kits and on-site products.
               </div>
@@ -163,6 +213,7 @@ export default function MerchPage() {
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: 800,
                 fontFamily: 'Nunito, sans-serif',
+                flexShrink: 0,
               }}
             >
               {loading ? 'Loading…' : '↻ Refresh'}
@@ -185,7 +236,6 @@ export default function MerchPage() {
             </div>
           )}
 
-          {/* Create new */}
           <div
             style={{
               background: 'rgba(255,255,255,0.04)',
@@ -193,79 +243,38 @@ export default function MerchPage() {
               borderRadius: 12,
               padding: 18,
               marginBottom: 18,
+              overflow: 'hidden',
             }}
           >
             <div style={{ fontWeight: 900, marginBottom: 12 }}>Add new product</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr', gap: 10 }}>
-              <input
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="Name"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 10,
-                  padding: '12px 12px',
-                  color: '#fff',
-                  fontWeight: 800,
-                }}
-              />
+            <div className="merch-add-grid">
+              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Name" style={fieldStyle} />
               <input
                 value={newDescription}
                 onChange={e => setNewDescription(e.target.value)}
                 placeholder="Description"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 10,
-                  padding: '12px 12px',
-                  color: '#fff',
-                  fontWeight: 700,
-                }}
+                style={fieldStyle}
               />
               <input
                 value={newCategory}
                 onChange={e => setNewCategory(e.target.value)}
                 placeholder="Category"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 10,
-                  padding: '12px 12px',
-                  color: '#fff',
-                  fontWeight: 700,
-                }}
+                style={fieldStyle}
               />
               <input
                 value={newPrice}
                 onChange={e => setNewPrice(e.target.value)}
                 placeholder="Price (KES)"
                 type="number"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 10,
-                  padding: '12px 12px',
-                  color: '#fff',
-                  fontWeight: 800,
-                }}
+                style={fieldStyle}
               />
               <input
                 value={newStock}
                 onChange={e => setNewStock(e.target.value)}
                 placeholder="Stock"
                 type="number"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 10,
-                  padding: '12px 12px',
-                  color: '#fff',
-                  fontWeight: 800,
-                }}
+                style={fieldStyle}
               />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
               <button
                 onClick={createProduct}
                 disabled={!canCreate || saving}
@@ -273,12 +282,14 @@ export default function MerchPage() {
                   background: 'linear-gradient(135deg,#ff5e1a,#ff8c42)',
                   border: 'none',
                   borderRadius: 10,
-                  padding: '10px 14px',
+                  padding: '10px 16px',
                   color: '#fff',
                   fontWeight: 900,
                   cursor: !canCreate || saving ? 'not-allowed' : 'pointer',
                   opacity: !canCreate || saving ? 0.6 : 1,
                   fontFamily: 'Nunito, sans-serif',
+                  whiteSpace: 'nowrap',
+                  width: '100%',
                 }}
               >
                 {saving ? 'Saving…' : '+ Add'}
@@ -286,7 +297,6 @@ export default function MerchPage() {
             </div>
           </div>
 
-          {/* List */}
           <div
             style={{
               background: 'rgba(255,255,255,0.04)',
@@ -299,163 +309,144 @@ export default function MerchPage() {
             {products.length === 0 ? (
               <div style={{ padding: '14px 18px', color: 'rgba(255,255,255,0.35)' }}>No products yet.</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    {['Name', 'Category', 'Active', 'Price (KES)', 'Stock', 'Actions'].map(h => (
-                      <th
-                        key={h}
-                        style={{
-                          padding: '10px 14px',
-                          textAlign: 'left',
-                          color: 'rgba(255,255,255,0.4)',
-                          fontSize: 11,
-                          textTransform: 'uppercase',
-                          fontWeight: 800,
-                          letterSpacing: '0.06em',
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p, i) => {
-                    const v = p.merch_variants?.[0]
-                    const edit = v ? edits[v.id] : undefined
-                    return (
-                      <tr
-                        key={p.id}
-                        style={{
-                          borderTop: '1px solid rgba(255,255,255,0.06)',
-                          background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                        }}
-                      >
-                        <td style={{ padding: '10px 14px' }}>
-                          <div style={{ fontWeight: 900 }}>{p.name}</div>
-                          {p.description && <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{p.description}</div>}
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>{p.category}</td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <span
-                            style={{
-                              padding: '2px 8px',
-                              borderRadius: 4,
-                              fontSize: 11,
-                              fontWeight: 900,
-                              background: p.is_active ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-                              color: p.is_active ? '#4ade80' : '#f87171',
-                            }}
-                          >
-                            {p.is_active ? 'active' : 'inactive'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <input
-                            value={edit?.price ?? (v ? String(v.price_kes) : '0')}
-                            onChange={e =>
-                              v &&
-                              setEdits(m => ({
-                                ...m,
-                                [v.id]: { price: e.target.value, stock: m[v.id]?.stock ?? String(v.stock_qty ?? 0) },
-                              }))
-                            }
-                            type="number"
-                            style={{
-                              width: 140,
-                              background: 'rgba(255,255,255,0.06)',
-                              border: '1px solid rgba(255,255,255,0.12)',
-                              borderRadius: 8,
-                              padding: '8px 10px',
-                              color: '#fff',
-                              fontWeight: 800,
-                              fontFamily: 'Nunito, sans-serif',
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <input
-                            value={edit?.stock ?? (v ? String(v.stock_qty) : '0')}
-                            onChange={e =>
-                              v &&
-                              setEdits(m => ({
-                                ...m,
-                                [v.id]: { price: m[v.id]?.price ?? String(v.price_kes ?? 0), stock: e.target.value },
-                              }))
-                            }
-                            type="number"
-                            style={{
-                              width: 110,
-                              background: 'rgba(255,255,255,0.06)',
-                              border: '1px solid rgba(255,255,255,0.12)',
-                              borderRadius: 8,
-                              padding: '8px 10px',
-                              color: '#fff',
-                              fontWeight: 800,
-                              fontFamily: 'Nunito, sans-serif',
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: '10px 14px' }}>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button
-                              onClick={() =>
+              <div className="merch-table-wrap">
+                <table className="merch-table">
+                  <colgroup>
+                    <col style={{ width: '28%' }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '10%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '20%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      {['Name', 'Category', 'Active', 'Price (KES)', 'Stock', 'Actions'].map(h => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((p, i) => {
+                      const v = p.merch_variants?.[0]
+                      const edit = v ? edits[v.id] : undefined
+                      return (
+                        <tr
+                          key={p.id}
+                          style={{
+                            borderTop: '1px solid rgba(255,255,255,0.06)',
+                            background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                          }}
+                        >
+                          <td>
+                            <div style={{ fontWeight: 900, overflowWrap: 'anywhere' }}>{p.name}</div>
+                            {p.description ? (
+                              <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 2, overflowWrap: 'anywhere' }}>
+                                {p.description}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td style={{ color: 'rgba(255,255,255,0.75)', overflowWrap: 'anywhere' }}>
+                            {p.category?.trim() || '—'}
+                          </td>
+                          <td>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 900,
+                                background: p.is_active ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                                color: p.is_active ? '#4ade80' : '#f87171',
+                              }}
+                            >
+                              {p.is_active ? 'active' : 'inactive'}
+                            </span>
+                          </td>
+                          <td>
+                            <input
+                              value={edit?.price ?? (v ? String(v.price_kes) : '0')}
+                              onChange={e =>
                                 v &&
-                                saveVariant(
-                                  p,
-                                  v,
-                                  Number((edits[v.id]?.price ?? String(v.price_kes ?? 0)).trim() || 0),
-                                  Number((edits[v.id]?.stock ?? String(v.stock_qty ?? 0)).trim() || 0)
-                                )
+                                setEdits(m => ({
+                                  ...m,
+                                  [v.id]: { price: e.target.value, stock: m[v.id]?.stock ?? String(v.stock_qty ?? 0) },
+                                }))
                               }
-                              disabled={!v}
-                              style={{
-                                background: 'rgba(255,255,255,0.06)',
-                                border: '1px solid rgba(255,255,255,0.12)',
-                                color: '#ffd700',
-                                padding: '8px 10px',
-                                borderRadius: 8,
-                                cursor: v ? 'pointer' : 'not-allowed',
-                                fontWeight: 900,
-                                fontFamily: 'Nunito, sans-serif',
-                                fontSize: 12,
-                              }}
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => toggleActive(p)}
-                              style={{
-                                background: p.is_active ? 'rgba(248,113,113,0.12)' : 'rgba(74,222,128,0.12)',
-                                border: '1px solid rgba(255,255,255,0.12)',
-                                color: p.is_active ? '#f87171' : '#4ade80',
-                                padding: '8px 10px',
-                                borderRadius: 8,
-                                cursor: 'pointer',
-                                fontWeight: 900,
-                                fontFamily: 'Nunito, sans-serif',
-                                fontSize: 12,
-                              }}
-                            >
-                              {p.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                              type="number"
+                              style={fieldStyle}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              value={edit?.stock ?? (v ? String(v.stock_qty) : '0')}
+                              onChange={e =>
+                                v &&
+                                setEdits(m => ({
+                                  ...m,
+                                  [v.id]: { price: m[v.id]?.price ?? String(v.price_kes ?? 0), stock: e.target.value },
+                                }))
+                              }
+                              type="number"
+                              style={fieldStyle}
+                            />
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() =>
+                                  v &&
+                                  saveVariant(
+                                    p,
+                                    v,
+                                    Number((edits[v.id]?.price ?? String(v.price_kes ?? 0)).trim() || 0),
+                                    Number((edits[v.id]?.stock ?? String(v.stock_qty ?? 0)).trim() || 0),
+                                  )
+                                }
+                                disabled={!v}
+                                style={{
+                                  background: 'rgba(255,255,255,0.06)',
+                                  border: '1px solid rgba(255,255,255,0.12)',
+                                  color: '#ffd700',
+                                  padding: '8px 10px',
+                                  borderRadius: 8,
+                                  cursor: v ? 'pointer' : 'not-allowed',
+                                  fontWeight: 900,
+                                  fontFamily: 'Nunito, sans-serif',
+                                  fontSize: 12,
+                                }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => toggleActive(p)}
+                                style={{
+                                  background: p.is_active ? 'rgba(248,113,113,0.12)' : 'rgba(74,222,128,0.12)',
+                                  border: '1px solid rgba(255,255,255,0.12)',
+                                  color: p.is_active ? '#f87171' : '#4ade80',
+                                  padding: '8px 10px',
+                                  borderRadius: 8,
+                                  cursor: 'pointer',
+                                  fontWeight: 900,
+                                  fontFamily: 'Nunito, sans-serif',
+                                  fontSize: 12,
+                                }}
+                              >
+                                {p.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </div>
-
-          <div style={{ marginTop: 12, fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>
-            Note: this screen uses server-side admin access via `/api/merch/*`.
           </div>
         </div>
       </div>
     </>
   )
 }
-

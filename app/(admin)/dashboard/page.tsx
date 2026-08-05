@@ -1,8 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type Tab = 'overview' | 'accounting' | 'visitors'
+
+const TAB_LABELS: Record<Tab, string> = {
+  overview: 'Bookings',
+  accounting: 'Payments & export',
+  visitors: 'Customer records',
+}
 
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) return ''
@@ -33,10 +39,69 @@ function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   URL.revokeObjectURL(url)
 }
 
+function toLocalDateKey(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function shiftDate(dateStr: string, days: number) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const next = new Date(y, (m || 1) - 1, (d || 1) + days)
+  return toLocalDateKey(next)
+}
+
+function formatLongDate(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString('en-KE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+const navBtnStyle: CSSProperties = {
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  color: '#fff',
+  padding: '8px 12px',
+  borderRadius: 10,
+  cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 800,
+  fontFamily: 'Nunito, sans-serif',
+}
+
+const SLOT_LABELS: Record<string, string> = {
+  '09:00-11:00': '9:00 AM – 11:00 AM',
+  '10:00-12:00': '10:00 AM – 12:00 PM',
+  '11:00-13:00': '11:00 AM – 1:00 PM',
+  '12:00-14:00': '12:00 PM – 2:00 PM',
+  '13:00-15:00': '1:00 PM – 3:00 PM',
+  '14:00-16:00': '2:00 PM – 4:00 PM',
+  '15:00-17:00': '3:00 PM – 5:00 PM',
+}
+
 export default function DashboardPage() {
+  const today = toLocalDateKey()
   const [tab, setTab] = useState<Tab>('overview')
+  const [selectedDate, setSelectedDate] = useState(today)
   const [kpis, setKpis] = useState({ ticketRev: 0, visitors: 0, bookings: 0 })
   const [sessions, setSessions] = useState<{ id?: string; time_slot: string; capacity: number; booked_count: number; is_blocked?: boolean }[]>([])
+  const [dayBookings, setDayBookings] = useState<
+    {
+      booking_ref: string
+      booker_name: string | null
+      booker_phone?: string | null
+      adult_count: number
+      child_count: number
+      total_amount_kes: number
+      payment_status: string
+      sessions?: { time_slot?: string; session_date?: string } | null
+    }[]
+  >([])
   const [recent, setRecent] = useState<
     {
       booking_ref: string
@@ -45,28 +110,51 @@ export default function DashboardPage() {
       child_count: number
       total_amount_kes: number
       payment_status: string
+      sessions?: { session_date?: string; time_slot?: string } | null
     }[]
   >([])
   const [trialBalance, setTrialBalance] = useState<
     { code: string; name: string; account_type: string; net_balance: number }[]
   >([])
   const [loading, setLoading] = useState(true)
+  const [dateLoading, setDateLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
     async function load() {
-      const [bRes, sRes, rRes, tbRes] = await Promise.all([
+      setDateLoading(true)
+      await fetch('/api/sessions/ensure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionDate: selectedDate }),
+      }).catch(() => null)
+
+      const sRes = await supabase
+        .from('sessions')
+        .select('id, time_slot, capacity, booked_count, is_blocked')
+        .eq('session_date', selectedDate)
+        .order('time_slot')
+      const sessionIds = ((sRes.data || []) as { id: string }[]).map(s => s.id)
+
+      const [bRes, dayRes, rRes, tbRes] = await Promise.all([
         supabase
           .from('bookings')
           .select('total_amount_kes, adult_count, child_count')
           .eq('payment_status', 'paid'),
-        supabase.from('sessions').select('id, time_slot, capacity, booked_count, is_blocked').eq('session_date', today),
+        sessionIds.length
+          ? supabase
+              .from('bookings')
+              .select(
+                'booking_ref, booker_name, booker_phone, adult_count, child_count, total_amount_kes, payment_status, session_id, sessions(time_slot, session_date)',
+              )
+              .in('session_id', sessionIds)
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as never[] }),
         supabase
           .from('bookings')
-          .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status')
+          .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status, sessions(session_date, time_slot)')
           .order('created_at', { ascending: false })
-          .limit(15),
+          .limit(40),
         supabase.from('v_trial_balance').select('*').neq('net_balance', 0),
       ])
       const paid = bRes.data || []
@@ -76,25 +164,22 @@ export default function DashboardPage() {
         bookings: paid.length,
       })
       setSessions((sRes.data || []) as typeof sessions)
+      setDayBookings((dayRes.data || []) as typeof dayBookings)
       setRecent((rRes.data || []) as typeof recent)
       setTrialBalance((tbRes.data || []) as typeof trialBalance)
       setLoading(false)
+      setDateLoading(false)
     }
     load()
-  }, [today])
-
-  const SLOT_LABELS: Record<string, string> = {
-    '10:00-12:00': '10am – 12pm',
-    '12:00-14:00': '12pm – 2pm',
-    '14:00-16:00': '2pm – 4pm',
-  }
+  }, [selectedDate])
 
   async function toggleBlock(sessionId: string, nextBlocked: boolean) {
     await supabase.from('sessions').update({ is_blocked: nextBlocked }).eq('id', sessionId)
     const { data } = await supabase
       .from('sessions')
       .select('id, time_slot, capacity, booked_count, is_blocked')
-      .eq('session_date', today)
+      .eq('session_date', selectedDate)
+      .order('time_slot')
     setSessions((data || []) as typeof sessions)
   }
 
@@ -107,14 +192,15 @@ export default function DashboardPage() {
       if (error) throw error
       const rows =
         (((data || []) as any[])
-          .filter(b => b.sessions?.session_date === today)
+          .filter(b => b.sessions?.session_date === selectedDate)
           .map(b => ({
             visitor_name: b.booker_name || '',
             phone: b.booker_phone || '',
             count: (b.adult_count || 0) + (b.child_count || 0),
             time_slot: SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '',
+            date: b.sessions?.session_date || selectedDate,
           })) as Record<string, unknown>[]) || []
-      downloadCsv(`overview-bookings-${today}.csv`, rows)
+      downloadCsv(`overview-bookings-${selectedDate}.csv`, rows)
     } finally {
       setExporting(false)
     }
@@ -125,7 +211,7 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status, sessions(session_date)')
+        .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status, sessions(session_date, time_slot)')
         .order('created_at', { ascending: false })
       if (error) throw error
       const rows =
@@ -137,6 +223,7 @@ export default function DashboardPage() {
           amount_kes: b.total_amount_kes,
           payment_status: b.payment_status,
           date: b.sessions?.session_date || '',
+          time_slot: SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '',
         })) || []
       downloadCsv(`visitors-bookings-${today}.csv`, rows)
     } finally {
@@ -236,10 +323,9 @@ export default function DashboardPage() {
                 fontSize: 14,
                 fontWeight: 700,
                 fontFamily: 'Nunito, sans-serif',
-                textTransform: 'capitalize' as const,
               }}
             >
-              {t}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>
@@ -247,28 +333,71 @@ export default function DashboardPage() {
         {/* Overview */}
         {tab === 'overview' && (
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-              <div style={{ fontWeight: 800, fontSize: 16 }}>Today's sessions — {today}</div>
-              <button
-                onClick={exportOverview}
-                disabled={exporting}
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  color: exporting ? 'rgba(255,255,255,0.4)' : '#ffd700',
-                  padding: '8px 12px',
-                  borderRadius: 10,
-                  cursor: exporting ? 'not-allowed' : 'pointer',
-                  fontSize: 12,
-                  fontWeight: 800,
-                  fontFamily: 'Nunito, sans-serif',
-                }}
-              >
-                {exporting ? 'Exporting…' : '⬇️ Export CSV'}
-              </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>
+                  Sessions — {formatLongDate(selectedDate)}
+                  {selectedDate === today ? ' (Today)' : ''}
+                </div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
+                  {dateLoading
+                    ? 'Loading this day’s bookings…'
+                    : 'Pick day / month / year, then use Next to walk through upcoming bookings.'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(d => shiftDate(d, -1))}
+                  style={navBtnStyle}
+                >
+                  ← Previous
+                </button>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => e.target.value && setSelectedDate(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    color: '#fff',
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    fontFamily: 'Nunito, sans-serif',
+                    fontWeight: 700,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(d => shiftDate(d, 1))}
+                  style={navBtnStyle}
+                >
+                  Next →
+                </button>
+                <button type="button" onClick={() => setSelectedDate(today)} style={navBtnStyle}>
+                  Today
+                </button>
+                <button
+                  onClick={exportOverview}
+                  disabled={exporting}
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    color: exporting ? 'rgba(255,255,255,0.4)' : '#ffd700',
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    cursor: exporting ? 'not-allowed' : 'pointer',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    fontFamily: 'Nunito, sans-serif',
+                  }}
+                >
+                  {exporting ? 'Exporting…' : '⬇️ Export CSV'}
+                </button>
+              </div>
             </div>
             {sessions.length === 0 ? (
-              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No sessions for today yet.</div>
+              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No sessions for this date yet.</div>
             ) : (
               sessions.map(s => {
                 const pct = s.capacity > 0 ? Math.round((s.booked_count / s.capacity) * 100) : 0
@@ -316,6 +445,84 @@ export default function DashboardPage() {
                 )
               })
             )}
+
+            <div style={{ marginTop: 28, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 18 }}>
+              <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>
+                Bookings on this day
+                <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginLeft: 8 }}>
+                  {dayBookings.length}
+                </span>
+              </div>
+              {dayBookings.length === 0 ? (
+                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>
+                  No bookings for {formatLongDate(selectedDate)}. Use Next → to check the following day.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                        {['Ref', 'Name', 'Phone', 'Slot', 'Visitors', 'Amount', 'Status'].map(h => (
+                          <th
+                            key={h}
+                            style={{
+                              padding: '10px 12px',
+                              textAlign: 'left' as const,
+                              color: 'rgba(255,255,255,0.4)',
+                              fontSize: 11,
+                              textTransform: 'uppercase' as const,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dayBookings.map((b, i) => (
+                        <tr
+                          key={b.booking_ref}
+                          style={{
+                            borderTop: '1px solid rgba(255,255,255,0.06)',
+                            background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                          }}
+                        >
+                          <td style={{ padding: '10px 12px' }}>
+                            <a href={`/ticket/${b.booking_ref}`} style={{ color: '#ffd700', textDecoration: 'none', fontFamily: 'monospace' }}>
+                              {b.booking_ref}
+                            </a>
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>{b.booker_name || '—'}</td>
+                          <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.55)' }}>{b.booker_phone || '—'}</td>
+                          <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.7)' }}>
+                            {SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '—'}
+                          </td>
+                          <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.5)' }}>
+                            {b.adult_count}A · {b.child_count}C
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 700 }}>KES {b.total_amount_kes.toLocaleString()}</td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <span
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: b.payment_status === 'paid' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                                color: b.payment_status === 'paid' ? '#4ade80' : '#f87171',
+                              }}
+                            >
+                              {b.payment_status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -452,7 +659,7 @@ export default function DashboardPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                  {['Ref', 'Name', 'Visitors', 'Amount', 'Status'].map(h => (
+                  {['Ref', 'Name', 'Date', 'Slot', 'Visitors', 'Amount', 'Status'].map(h => (
                     <th
                       key={h}
                       style={{
@@ -484,6 +691,12 @@ export default function DashboardPage() {
                       </a>
                     </td>
                     <td style={{ padding: '10px 16px' }}>{b.booker_name || '—'}</td>
+                    <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>
+                      {b.sessions?.session_date || '—'}
+                    </td>
+                    <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>
+                      {SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '—'}
+                    </td>
                     <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.5)' }}>
                       {b.adult_count}A · {b.child_count}C
                     </td>

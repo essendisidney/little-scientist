@@ -70,7 +70,9 @@ export async function POST(req: NextRequest) {
     ].join('\n')
 
     await sendInfoEmail({
-      subject: `School enquiry — ${enquiryRef} — ${payload.school_name}`,
+      subject: `School enquiry — ${enquiryRef} — ${payload.school_name}${
+        String(payload.special_requirements || '').includes('CUSTOMIZED PLAN') ? ' — CUSTOM PLAN' : ''
+      }`,
       text,
     })
 

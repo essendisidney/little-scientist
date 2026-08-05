@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import QRCode from 'react-qr-code'
 import { computeBasket } from '@/lib/pricing'
@@ -23,9 +23,13 @@ type Ticket = {
 }
 
 const SLOT_LABELS: Record<string, string> = {
+  '09:00-11:00': '9:00 AM – 11:00 AM',
   '10:00-12:00': '10:00 AM – 12:00 PM',
+  '11:00-13:00': '11:00 AM – 1:00 PM',
   '12:00-14:00': '12:00 PM – 2:00 PM',
+  '13:00-15:00': '1:00 PM – 3:00 PM',
   '14:00-16:00': '2:00 PM – 4:00 PM',
+  '15:00-17:00': '3:00 PM – 5:00 PM',
 }
 
 export default function TicketPage({ params }: { params: { ref: string } }) {
@@ -33,6 +37,91 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  function Wrap({ children, right }: { children: ReactNode; right?: ReactNode }) {
+    return (
+      <>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { background: #08122e; }
+          @media print { .no-print { display: none !important; } }
+        `}</style>
+        <div style={{ minHeight: '100vh', background: '#08122e', position: 'relative', overflow: 'hidden', color: '#fff' }}>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              backgroundImage:
+                'linear-gradient(rgba(46,142,255,0.08) 1px,transparent 1px),linear-gradient(90deg,rgba(46,142,255,0.08) 1px,transparent 1px)',
+              backgroundSize: '44px 44px',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: -100,
+              left: -80,
+              width: 500,
+              height: 500,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle,rgba(46,142,255,0.18) 0%,transparent 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: -80,
+              right: -60,
+              width: 400,
+              height: 400,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle,rgba(0,200,180,0.10) 0%,transparent 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 50,
+              background: 'rgba(8,18,46,0.92)',
+              backdropFilter: 'blur(12px)',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              padding: '12px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <a
+              href="/"
+              style={{
+                fontFamily: "'Space Grotesk', sans-serif",
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+                fontSize: 20,
+                color: 'rgba(255,255,255,0.8)',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              🔬 Little Scientist
+            </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{right}</div>
+          </div>
+
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 860, margin: '0 auto', padding: '32px 24px 60px' }}>{children}</div>
+        </div>
+      </>
+    )
+  }
 
   useEffect(() => {
     async function load() {
@@ -67,471 +156,233 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
     load()
   }, [params.ref])
 
-  if (loading)
+  if (loading) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#08081a',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#94a3b8',
-          fontFamily: 'Nunito, sans-serif',
-        }}
-      >
-        Loading tickets...
-      </div>
+      <Wrap>
+        <div
+          style={{
+            minHeight: 320,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'rgba(255,255,255,0.55)',
+            fontFamily: 'Plus Jakarta Sans, sans-serif',
+            fontWeight: 700,
+          }}
+        >
+          Loading tickets...
+        </div>
+      </Wrap>
     )
+  }
 
-  if (error)
+  if (error) {
     return (
-      <div style={{ minHeight: '100vh', background: '#08081a', fontFamily: 'Nunito, sans-serif', color: '#fff' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '60px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
-          <h2 style={{ marginBottom: 8 }}>Ticket not found</h2>
-          <p style={{ color: '#94a3b8' }}>{error}</p>
-          <a href="/book" style={{ color: '#ff7235', display: 'block', marginTop: 24 }}>
+      <Wrap>
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '26px 0', textAlign: 'center' }}>
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 999,
+              background: 'rgba(248,113,113,0.12)',
+              border: '1px solid rgba(248,113,113,0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 34,
+              margin: '0 auto 16px',
+            }}
+          >
+            ✕
+          </div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, letterSpacing: '-0.02em', fontSize: 32, marginBottom: 8, color: '#fff' }}>Ticket not found</div>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.65, maxWidth: 600, margin: '0 auto' }}>{error}</p>
+          <a
+            href="/book"
+            style={{
+              display: 'inline-block',
+              marginTop: 18,
+              color: '#2e8eff',
+              textDecoration: 'none',
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              fontWeight: 700,
+              letterSpacing: '0.01em',
+            }}
+          >
             ← Book again
           </a>
         </div>
-      </div>
+      </Wrap>
     )
+  }
 
   const session = booking?.sessions as { session_date: string; time_slot: string }
   const basket = booking ? computeBasket(booking.adult_count, booking.child_count) : null
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #08081a; }
-        @media print { .no-print { display: none !important; } }
-      `}</style>
-      <div style={{ minHeight: '100vh', background: '#08081a', fontFamily: 'Nunito, sans-serif', color: '#fff' }}>
-        {/* Header */}
-        <div
+    <Wrap
+      right={
+        <button
+          className="no-print"
+          onClick={() => window.print()}
           style={{
-            background: 'linear-gradient(135deg, #160a2e, #0d1535)',
-            borderBottom: '1px solid rgba(255,165,0,0.2)',
-            padding: '14px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            color: '#fff',
+            padding: '8px 14px',
+            borderRadius: 10,
+            cursor: 'pointer',
+            fontSize: 13,
+            fontFamily: 'Plus Jakarta Sans, sans-serif',
+            fontWeight: 800,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg,#ff5e1a,#ffb347)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 20,
-              }}
-            >
-              🔬
-            </div>
+          🖨️ Save / Print
+        </button>
+      }
+    >
+      {booking && basket && (
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 14,
+            padding: 20,
+            marginBottom: 18,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <div
-                style={{
-                  fontWeight: 900,
-                  fontSize: 18,
-                  background: 'linear-gradient(90deg,#ff7235,#ffd700)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
-                Little Scientist
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500, fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em' }}>
+                Booking confirmed
               </div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Children's Science Park</div>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontWeight: 500, fontSize: 24, color: '#FFD94A', letterSpacing: '0.04em', marginTop: 6 }}>
+                {booking.booking_ref}
+              </div>
+            </div>
+            <div style={{ background: 'rgba(0,200,180,0.12)', border: '1px solid rgba(0,200,180,0.25)', borderRadius: 999, padding: '6px 12px', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 12, letterSpacing: '0.01em', color: '#00c8a0' }}>
+              PAID
             </div>
           </div>
-          <button
-            className="no-print"
-            onClick={() => window.print()}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#fff',
-              padding: '8px 16px',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: 13,
-              fontFamily: 'Nunito, sans-serif',
-              fontWeight: 700,
-            }}
-          >
-            🖨️ Save / Print
-          </button>
+
+          <div style={{ marginTop: 14, color: 'rgba(255,255,255,0.85)', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.65, maxWidth: 600 }}>
+            {booking.booker_name && <div>👤 {booking.booker_name}</div>}
+            <div>
+              📅{' '}
+              {new Date(session.session_date).toLocaleDateString('en-KE', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </div>
+            <div>🕙 {SLOT_LABELS[session.time_slot] || session.time_slot}</div>
+            <div>
+              👨🏾‍👩🏾‍👧🏾 {booking.adult_count} adult{booking.adult_count > 1 ? 's' : ''} · {booking.child_count} child
+              {booking.child_count > 1 ? 'ren' : ''}
+            </div>
+          </div>
         </div>
+      )}
 
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 16px' }}>
-          {/* Booking info + VAT receipt */}
-          {booking && basket && (
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 16,
-                padding: 20,
-                marginBottom: 16,
-                fontFamily: 'Nunito, sans-serif',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: 'rgba(255,255,255,0.4)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                      marginBottom: 4,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Booking confirmed ✓
-                  </div>
-                  <div style={{ fontFamily: "'Fredoka One',cursive", fontSize: 24, color: '#FFD700', letterSpacing: '0.1em' }}>
-                    {booking.booking_ref}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: 'rgba(46,204,113,0.12)',
-                    border: '1px solid rgba(46,204,113,0.3)',
-                    borderRadius: 8,
-                    padding: '4px 12px',
-                    fontSize: 12,
-                    fontWeight: 800,
-                    color: '#2ecc71',
-                  }}
-                >
-                  PAID
-                </div>
-              </div>
-
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 2, marginBottom: 16 }}>
-                {booking.booker_name && <div>👤 {booking.booker_name}</div>}
-                <div>
-                  📅{' '}
-                  {new Date(session.session_date).toLocaleDateString('en-KE', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
-                </div>
-                <div>🕙 {SLOT_LABELS[session.time_slot] || session.time_slot}</div>
-                <div>
-                  👨‍👩‍👧 {booking.adult_count} adult{booking.adult_count > 1 ? 's' : ''} · {booking.child_count} child
-                  {booking.child_count > 1 ? 'ren' : ''}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: 'rgba(0,0,0,0.2)',
-                  borderRadius: 12,
-                  padding: '14px 16px',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,0.35)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                    fontWeight: 800,
-                    marginBottom: 12,
-                  }}
-                >
-                  🧾 Receipt
-                </div>
-
-                {[
-                  { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
-                  { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
-                ]
-                  .filter(i => i.amount > 0)
-                  .map(item => (
-                    <div
-                      key={item.label}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontSize: 13,
-                        color: 'rgba(255,255,255,0.65)',
-                        marginBottom: 6,
-                        fontWeight: 600,
-                      }}
-                    >
-                      <span>{item.label}</span>
-                      <span>KES {item.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
-
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 8, paddingTop: 8 }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 12,
-                      color: 'rgba(255,255,255,0.35)',
-                      marginBottom: 4,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <span>Entry fees (excl. VAT)</span>
-                    <span>KES {basket.totalExclFormatted}</span>
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 12,
-                      color: 'rgba(255,255,255,0.35)',
-                      marginBottom: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <span>VAT @ 16%</span>
-                    <span>KES {basket.totalVatFormatted}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 900 }}>
-                    <span style={{ color: '#fff' }}>Total paid</span>
-                    <span style={{ color: '#FFD700' }}>KES {basket.grandTotalFormatted}</span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 12,
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,0.25)',
-                    fontWeight: 700,
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
-                    paddingTop: 10,
-                  }}
-                >
-                  VAT Reg. No: [Little Scientist VAT Number] · KRA ETR Receipt: {booking.booking_ref}
-                  <br />
-                  Prices are VAT-inclusive at 16% as required by the Kenya Revenue Authority.
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 16, textAlign: 'center' }}>
-            Show each QR code to gate staff. Each QR works <strong style={{ color: '#fff' }}>once only</strong>.
+      {booking && basket && (
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 14,
+            padding: 20,
+            marginBottom: 18,
+          }}
+        >
+        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500, fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', marginBottom: 12 }}>
+            🧾 Receipt
           </div>
+          {[
+            { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
+            { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
+          ]
+            .filter(i => i.amount > 0)
+            .map(item => (
+              <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 8, fontWeight: 600, lineHeight: 1.65 }}>
+                <span>{item.label}</span>
+                <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 500 }}>KES {item.amount.toLocaleString()}</span>
+              </div>
+            ))}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 12, paddingTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, letterSpacing: '-0.01em', fontSize: 22, color: '#FFD94A' }}>Total</span>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 500, fontSize: 22, color: '#FFD94A' }}>KES {basket.grandTotalFormatted}</span>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.45)', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, lineHeight: 1.7, maxWidth: 600 }}>
+              Children 94.9cm and below enter FREE (not ticketed). Please inform gate staff for height checks.
+            </div>
+          </div>
+        </div>
+      )}
 
-          {/* QR tickets */}
-          {tickets.map((ticket, i) => (
-            <div
-              key={ticket.id}
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: `1px solid ${ticket.is_used ? 'rgba(248,113,113,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                borderRadius: 16,
-                padding: 20,
-                marginBottom: 14,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: 'rgba(255,255,255,0.4)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                    }}
-                  >
-                    Ticket {i + 1}
-                  </div>
-                  <div style={{ fontWeight: 900, fontSize: 20 }}>{ticket.ticket_type}</div>
-                </div>
+      <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 18, textAlign: 'center', fontWeight: 400, lineHeight: 1.7, maxWidth: 600, marginLeft: 'auto', marginRight: 'auto' }}>
+        Show each QR code to gate staff. Each QR works <strong style={{ color: '#fff' }}>once only</strong>.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 18 }}>
+        {tickets.map(ticket => {
+          const type = String(ticket.ticket_type || '')
+          const isAdult = /adult/i.test(type)
+          const badgeBg = isAdult ? 'rgba(46,142,255,0.18)' : 'rgba(160,96,255,0.18)'
+          const badgeColor = isAdult ? '#2e8eff' : '#a060ff'
+          const badgeBorder = isAdult ? 'rgba(46,142,255,0.35)' : 'rgba(160,96,255,0.35)'
+          return (
+            <div key={ticket.id} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${ticket.is_used ? 'rgba(248,113,113,0.28)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 16, padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', borderRadius: 999, background: badgeBg, border: `1px solid ${badgeBorder}`, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, letterSpacing: '-0.01em', color: badgeColor, fontSize: 13 }}>
+                  {isAdult ? 'Adult' : 'Child'}
+                </span>
                 {ticket.is_used && (
-                  <div
-                    style={{
-                      background: 'rgba(248,113,113,0.15)',
-                      color: '#f87171',
-                      padding: '4px 12px',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      border: '1px solid rgba(248,113,113,0.3)',
-                    }}
-                  >
+                  <span style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.28)', color: '#f87171', borderRadius: 999, padding: '6px 10px', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, letterSpacing: '0.01em', fontSize: 12 }}>
                     USED
-                  </div>
+                  </span>
                 )}
               </div>
-              <div style={{ background: '#fff', borderRadius: 12, padding: 16, display: 'flex', justifyContent: 'center' }}>
-                <QRCode value={ticket.qr_code} size={180} />
+              <div style={{ background: '#fff', borderRadius: 12, padding: 12, display: 'flex', justifyContent: 'center' }}>
+                <QRCode value={ticket.qr_code} size={200} />
               </div>
-              <div
-                style={{
-                  textAlign: 'center',
-                  marginTop: 10,
-                  fontSize: 11,
-                  color: 'rgba(255,255,255,0.3)',
-                  fontFamily: 'monospace',
-                }}
-              >
-                {ticket.qr_code.slice(0, 8).toUpperCase()}
+              <div style={{ marginTop: 12, textAlign: 'center', fontFamily: "'DM Mono', monospace", fontWeight: 500, fontSize: 16, color: '#FFD94A' }}>{booking?.booking_ref}</div>
+              <div style={{ marginTop: 6, textAlign: 'center', fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.65 }}>
+                {new Date(session.session_date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · {SLOT_LABELS[session.time_slot] || session.time_slot}
               </div>
             </div>
-          ))}
+          )
+        })}
+      </div>
 
-          <div style={{ fontFamily: 'Nunito,sans-serif' }}>
-            {/* Contact block */}
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 16,
-                padding: '18px 20px',
-                marginBottom: 14,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "'Fredoka One',cursive",
-                  fontSize: 17,
-                  color: '#FFD700',
-                  marginBottom: 12,
-                }}
-              >
-                🔬 Little Scientist Children&apos;s Science Park
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: 'rgba(255,255,255,0.6)',
-                  fontWeight: 700,
-                  lineHeight: 2,
-                }}
-              >
-                <div>📍 Sabaki Estate, Mombasa Road, Nairobi</div>
-                <div>
-                  📞{' '}
-                  <a href="tel:0700101425" style={{ color: '#7FFFD4', textDecoration: 'none' }}>
-                    0700 101 425
-                  </a>
-                  &nbsp;&nbsp;·&nbsp;&nbsp; 📧{' '}
-                  <a href="mailto:info@littlescientist.ke" style={{ color: '#7FFFD4', textDecoration: 'none' }}>
-                    info@littlescientist.ke
-                  </a>
-                </div>
-                <div>🌐 littlescientist.ke</div>
-              </div>
-            </div>
-
-            {/* Ticket validity notice */}
-            <div
-              style={{
-                background: 'rgba(255,215,0,0.07)',
-                border: '1px solid rgba(255,215,0,0.2)',
-                borderRadius: 16,
-                padding: '14px 20px',
-                marginBottom: 14,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color: 'rgba(255,215,0,0.8)',
-                  textTransform: 'uppercase' as const,
-                  letterSpacing: '0.08em',
-                  marginBottom: 8,
-                }}
-              >
-                ⏰ Ticket validity
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: 'rgba(255,255,255,0.6)',
-                  fontWeight: 700,
-                  lineHeight: 1.8,
-                }}
-              >
-                Your ticket is valid only during your booked session time slot. Please arrive within your session window.{' '}
-                <strong style={{ color: '#FFD700' }}> Tickets cannot be used outside the booked session time.</strong>
-              </div>
-            </div>
-
-            {/* Disclaimers */}
-            <div
-              style={{
-                background: 'rgba(255,107,157,0.04)',
-                border: '1px solid rgba(255,107,157,0.12)',
-                borderRadius: 16,
-                padding: '16px 20px',
-                marginBottom: 14,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color: 'rgba(255,107,157,0.7)',
-                  textTransform: 'uppercase' as const,
-                  letterSpacing: '0.08em',
-                  marginBottom: 10,
-                }}
-              >
-                Important notices
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: 'rgba(255,255,255,0.5)',
-                  fontWeight: 700,
-                  lineHeight: 2,
-                }}
-              >
-                <div>
-                  🎟️ Tickets are{' '}
-                  <strong style={{ color: 'rgba(255,255,255,0.75)' }}>non-refundable and non-transferable</strong>
-                </div>
-                <div>
-                  🚫 Little Scientist is a <strong style={{ color: 'rgba(255,255,255,0.75)' }}>drug and alcohol free</strong>{' '}
-                  environment
-                </div>
-                <div>
-                  📵 Little Scientist has <strong style={{ color: 'rgba(255,255,255,0.75)' }}>no social media handles</strong>{' '}
-                  or any other websites
-                </div>
-                <div>⚠️ Beware of fraudulent accounts or sites claiming to represent Little Scientist</div>
-              </div>
-            </div>
-
-            {/* Copyright */}
-            <div
-              style={{
-                fontSize: 11,
-                color: 'rgba(255,255,255,0.2)',
-                fontWeight: 700,
-                textAlign: 'center' as const,
-                lineHeight: 1.7,
-                paddingTop: 8,
-              }}
-            >
-              © {new Date().getFullYear()} Little Scientist Limited. All rights reserved.
-            </div>
+      <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: 18 }}>
+        <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500, fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', marginBottom: 10 }}>
+          Contact + disclaimers
+        </div>
+        <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.65, maxWidth: 600 }}>
+          <div>📍 Sabaki Estate, Mombasa Road, Nairobi</div>
+          <div>
+            📞{' '}
+            <a href="tel:0700101425" style={{ color: '#00c8a0', textDecoration: 'none', fontWeight: 800 }}>
+              0700 101 425
+            </a>{' '}
+            · 📧{' '}
+            <a href="mailto:info@littlescientist.ke" style={{ color: '#00c8a0', textDecoration: 'none', fontWeight: 800 }}>
+              info@littlescientist.ke
+            </a>
           </div>
+          <div>🌐 littlescientist.ke</div>
+        </div>
+        <div style={{ marginTop: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7, maxWidth: 600 }}>
+          🎟️ Tickets are non-refundable and non-transferable.
+          <br />
+          🚫 Little Scientist is a drug and alcohol free environment.
+          <br />
+          🔒 Beware of fraudulent accounts claiming to represent us.
         </div>
       </div>
-    </>
+    </Wrap>
   )
 }

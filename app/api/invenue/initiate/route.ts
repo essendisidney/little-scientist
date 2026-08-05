@@ -6,10 +6,7 @@ export async function GET(req: NextRequest) {
   const ref = req.nextUrl.searchParams.get('ref')
   if (!ref) return NextResponse.json({ error: 'ref required' }, { status: 400 })
 
-  const { data: booking } = await supabaseAdmin
-    .from('bookings')
-    .select(
-      `
+  const selectBooking = `
       *,
       sessions(session_date, time_slot),
       in_venue_purchases(
@@ -17,9 +14,24 @@ export async function GET(req: NextRequest) {
         total_kes, payment_status, created_at
       )
     `
-    )
+
+  // 1) Try booking ref directly
+  const { data: byRef } = await supabaseAdmin
+    .from('bookings')
+    .select(selectBooking)
     .eq('booking_ref', ref.toUpperCase())
     .single()
+
+  if (byRef) return NextResponse.json({ booking: byRef })
+
+  // 2) Fallback: treat input as a ticket QR code, resolve booking
+  const { data: t } = await supabaseAdmin
+    .from('tickets')
+    .select(`booking_id, bookings(${selectBooking})`)
+    .eq('qr_code', ref)
+    .single()
+
+  const booking = (t as any)?.bookings || null
 
   if (!booking) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
   return NextResponse.json({ booking })

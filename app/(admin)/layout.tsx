@@ -3,25 +3,61 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+type Role = 'admin' | 'gate' | 'counter' | 'accounting'
+
 const NAV = [
-  { href: '/admin/dashboard', label: '📊 Dashboard' },
-  { href: '/admin/verify', label: '📷 Gate Verify' },
-  { href: '/admin/invenue', label: '🛍️ In-Venue' },
-  { href: '/admin/accounting', label: '📚 Accounting' },
-  { href: '/admin/pricing', label: '💰 Pricing' },
-  { href: '/admin/merch', label: '🧪 Merch' },
-]
+  { href: '/admin/dashboard', label: 'Bookings' },
+  { href: '/admin/accounting', label: 'Payments' },
+  { href: '/admin/verify', label: 'Gate Verify' },
+  { href: '/admin/invenue', label: 'In-Venue' },
+  { href: '/admin/pricing', label: 'Pricing' },
+  { href: '/admin/merch', label: 'Merch' },
+] as const
+
+const ROLE_ALLOW: Record<Role, string[]> = {
+  admin: ['/admin'], // all admin routes
+  gate: ['/admin/verify'],
+  counter: ['/admin/invenue', '/admin/merch'],
+  accounting: ['/admin/accounting', '/admin/dashboard'],
+}
+
+function getRoleFromSession(session: any): Role {
+  const raw =
+    session?.user?.app_metadata?.role ??
+    session?.user?.user_metadata?.role ??
+    session?.user?.app_metadata?.roles?.[0] ??
+    session?.user?.user_metadata?.roles?.[0] ??
+    null
+  const v = typeof raw === 'string' ? raw.toLowerCase() : ''
+  if (v === 'gate' || v === 'counter' || v === 'accounting' || v === 'admin') return v
+  // Backwards-compatible default to avoid locking existing users out.
+  return 'admin'
+}
+
+function isAllowed(role: Role, pathname: string) {
+  const allow = ROLE_ALLOW[role]
+  return allow.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/') || prefix === '/admin')
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [checking, setChecking] = useState(true)
   const [authed, setAuthed] = useState(false)
+  const [role, setRole] = useState<Role>('admin')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
         setAuthed(true)
+        const r = getRoleFromSession(data.session)
+        setRole(r)
+        if (pathname !== '/admin/login' && !isAllowed(r, pathname)) {
+          const firstAllowed =
+            NAV.find(n => isAllowed(r, n.href))?.href ||
+            (r === 'gate' ? '/admin/verify' : r === 'counter' ? '/admin/invenue' : r === 'accounting' ? '/admin/accounting' : '/admin/dashboard')
+          router.replace(firstAllowed)
+        }
       } else if (pathname !== '/admin/login') {
         router.replace('/admin/login')
       }
@@ -54,6 +90,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (pathname === '/admin/login') return <>{children}</>
   if (!authed) return null
 
+  const visibleNav = NAV.filter(n => isAllowed(role, n.href))
+
   return (
     <div style={{ minHeight: '100vh', background: '#060d1a', fontFamily: 'Nunito, sans-serif' }}>
       <div
@@ -78,7 +116,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           🔬 LS Admin
         </div>
-        {NAV.map(n => (
+        <div
+          style={{
+            padding: '6px 10px',
+            borderRadius: 999,
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.04)',
+            color: 'rgba(255,255,255,0.45)',
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            marginRight: 10,
+            whiteSpace: 'nowrap' as const,
+            flexShrink: 0,
+          }}
+          title="Access level"
+        >
+          {role}
+        </div>
+        {visibleNav.map(n => (
           <a
             key={n.href}
             href={n.href}

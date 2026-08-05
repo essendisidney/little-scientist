@@ -47,14 +47,25 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < (booking.child_count as number); i++) {
         tickets.push({ booking_id: booking.id, ticket_type: 'Child' })
       }
+      const infantCount = Number((booking as { infant_count?: number }).infant_count || 0) || 0
+      const bookingKind = String((booking as { booking_kind?: string }).booking_kind || 'general')
+      // Birthday under-95cm tickets are paid — issue QR. General visits: free infants, no QR.
+      if (bookingKind === 'birthday' && infantCount > 0) {
+        for (let i = 0; i < infantCount; i++) {
+          tickets.push({ booking_id: booking.id, ticket_type: 'Child under 95cm' })
+        }
+      }
       await supabaseAdmin.from('tickets').insert(tickets)
 
-      await supabaseAdmin
+      const addCount =
+        (booking.adult_count as number) + (booking.child_count as number) + infantCount
+      const { data: sessionRow } = await supabaseAdmin
         .from('sessions')
-        .update({
-          booked_count: (booking.adult_count as number) + (booking.child_count as number),
-        })
+        .select('booked_count')
         .eq('id', booking.session_id)
+        .single()
+      const nextBooked = (sessionRow?.booked_count || 0) + addCount
+      await supabaseAdmin.from('sessions').update({ booked_count: nextBooked }).eq('id', booking.session_id)
 
       await supabaseAdmin.from('etr_receipts').insert({
         booking_id: booking.id,
@@ -70,6 +81,7 @@ export async function POST(req: NextRequest) {
         ticketAmountKes: booking.total_amount_kes as number,
         platformFeeKes: 0,
         mpesaReceipt: mpesaReceiptNumber,
+        bookingKind,
       })
 
       await supabaseAdmin.from('audit_log').insert({

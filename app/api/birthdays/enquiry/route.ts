@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendInfoEmail } from '@/lib/email'
+import { BIRTHDAY_FOOD_NOTICE } from '@/lib/pricing'
+
+function makeRef() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let out = 'BDY-'
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
+  return out
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const {
       parentName,
-      childName,
-      childAge,
+      email,
       guestCount,
       preferredDate,
       sessionPreference,
@@ -16,27 +23,37 @@ export async function POST(req: NextRequest) {
       phone,
     } = body as Record<string, unknown>
 
-    if (
-      !parentName ||
-      !childName ||
-      !childAge ||
-      !guestCount ||
-      !preferredDate ||
-      !sessionPreference ||
-      !phone
-    ) {
+    if (!parentName || !guestCount || !preferredDate || !sessionPreference || !phone || !email) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    const emailStr = String(email).trim()
+    if (!emailStr.includes('@')) {
+      return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
+    }
+
+    const enquiryRef = makeRef()
+
+    const notes = [
+      `Guardian email: ${emailStr}`,
+      BIRTHDAY_FOOD_NOTICE,
+      specialRequirements ? String(specialRequirements) : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
     const payload = {
       parent_name: String(parentName),
-      child_name: String(childName),
-      child_age: Number(childAge),
+      // Legacy column — child name no longer collected; store guardian label for ops.
+      child_name: String(parentName),
+      child_age: 0,
       guest_count: Number(guestCount),
       preferred_date: String(preferredDate),
       session_preference: String(sessionPreference),
-      special_requirements: specialRequirements ? String(specialRequirements) : null,
+      special_requirements: notes,
       phone: String(phone),
+      status: 'pending',
+      enquiry_ref: enquiryRef,
     }
 
     const { error: insErr } = await supabaseAdmin.from('birthday_enquiries').insert(payload)
@@ -45,29 +62,30 @@ export async function POST(req: NextRequest) {
     const text = [
       'New birthday enquiry (Little Scientist)',
       '',
-      `Parent name: ${payload.parent_name}`,
+      `Enquiry ref: ${enquiryRef}`,
+      `Parent / guardian: ${payload.parent_name}`,
       `Phone: ${payload.phone}`,
-      `Child name: ${payload.child_name}`,
-      `Child age: ${payload.child_age}`,
+      `Email: ${emailStr}`,
       `Number of guests: ${payload.guest_count}`,
       `Preferred date: ${payload.preferred_date}`,
       `Session preference: ${payload.session_preference}`,
-      `Special requirements: ${payload.special_requirements || '-'}`,
+      `Notes: ${payload.special_requirements || '-'}`,
       '',
       '— Sent from littlescientist.ke',
     ].join('\n')
 
     await sendInfoEmail({
-      subject: `Birthday enquiry — ${payload.child_name} — ${payload.preferred_date}`,
+      subject: `Birthday enquiry — ${enquiryRef} — ${payload.parent_name} — ${payload.preferred_date}${
+        String(payload.special_requirements || '').includes('CUSTOMIZED PLAN') ? ' — CUSTOM PLAN' : ''
+      }`,
       text,
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, enquiryRef })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to submit enquiry' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
-

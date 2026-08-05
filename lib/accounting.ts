@@ -26,20 +26,25 @@ export async function postTicketPayment(p: {
   ticketAmountKes: number
   platformFeeKes: number
   mpesaReceipt: string
+  bookingKind?: string
 }) {
+  const kind = String(p.bookingKind || 'general').toLowerCase()
+  const creditCode = kind === 'school' ? '4004' : kind === 'birthday' ? '4005' : '4001'
+  const label = kind === 'school' ? 'School trip' : kind === 'birthday' ? 'Birthday booking' : 'Ticket booking'
+
   await postEntry({
-    description: `Ticket booking — ${p.mpesaReceipt}`,
-    sourceType: 'booking',
+    description: `${label} — ${p.mpesaReceipt}`,
+    sourceType: kind === 'general' ? 'booking' : kind,
     sourceId: p.bookingId,
     debitCode: '1001',
-    creditCode: '4001',
+    creditCode,
     amountKes: p.ticketAmountKes,
     mpesaReceipt: p.mpesaReceipt,
   })
   if (p.platformFeeKes > 0) {
     await postEntry({
       description: `Platform fee — ${p.bookingId}`,
-      sourceType: 'booking',
+      sourceType: kind === 'general' ? 'booking' : kind,
       sourceId: p.bookingId,
       debitCode: '1001',
       creditCode: '4010',

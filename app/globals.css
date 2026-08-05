@@ -1,17 +1,19 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import "tailwindcss";
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #08081a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-ls-bg: #07132d;
+  --color-ls-secondary: #0e204f;
+  --color-ls-blue: #1ea7ff;
+  --color-ls-purple: #8b5cf6;
+  --color-ls-yellow: #ffc933;
+  --color-ls-cyan: #00e5ff;
+  --color-ls-white: #ffffff;
+  --font-heading: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 html {
-  height: 100%;
+  scroll-behavior: smooth;
 }
 
 html,
@@ -22,103 +24,53 @@ body {
 
 body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: #ffffff;
+  background: #07132d;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* --- Twinkling stars background (global) --- */
-.twinkle-stars {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  opacity: 0.22;
-  background:
-    radial-gradient(ellipse at 10% 0%, rgba(42, 8, 69, 0.55) 0%, transparent 55%),
-    radial-gradient(ellipse at 90% 15%, rgba(10, 45, 92, 0.55) 0%, transparent 55%),
-    #07041a;
-}
-
-.twinkle-stars::before,
-.twinkle-stars::after {
-  content: "";
-  position: absolute;
-  inset: -200px;
-  background-repeat: repeat;
-  background-size: 320px 320px;
-  opacity: 0.8;
-  animation: twinkleMove 70s linear infinite;
-  will-change: transform, opacity;
-}
-
-.twinkle-stars::before {
-  background-image:
-    radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.9), transparent 60%),
-    radial-gradient(1px 1px at 120px 160px, rgba(255,255,255,0.7), transparent 60%),
-    radial-gradient(1px 1px at 210px 90px, rgba(255,255,255,0.8), transparent 60%),
-    radial-gradient(1px 1px at 280px 240px, rgba(255,255,255,0.65), transparent 60%),
-    radial-gradient(1px 1px at 60px 260px, rgba(255,255,255,0.75), transparent 60%),
-    radial-gradient(1px 1px at 310px 40px, rgba(255,255,255,0.6), transparent 60%);
-  filter: blur(0.2px);
-  animation:
-    twinkleMove 90s linear infinite,
-    twinklePulseA 6.5s ease-in-out infinite;
-}
-
-.twinkle-stars::after {
-  background-size: 520px 520px;
-  background-image:
-    radial-gradient(1.5px 1.5px at 90px 110px, rgba(255,255,255,0.9), transparent 60%),
-    radial-gradient(1.2px 1.2px at 260px 300px, rgba(255,255,255,0.55), transparent 60%),
-    radial-gradient(1.4px 1.4px at 430px 210px, rgba(255,255,255,0.75), transparent 60%),
-    radial-gradient(1.1px 1.1px at 480px 60px, rgba(255,255,255,0.6), transparent 60%);
-  opacity: 0.55;
-  animation:
-    twinkleMove 140s linear infinite reverse,
-    twinklePulseB 8.2s ease-in-out infinite;
-}
-
-@keyframes twinkleMove {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(-240px, 240px, 0); }
-}
-
-@keyframes twinklePulseA {
-  0%, 100% { opacity: 0.75; }
-  50% { opacity: 0.95; }
-}
-
-@keyframes twinklePulseB {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.7; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .twinkle-stars::before,
-  .twinkle-stars::after {
-    animation: none !important;
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
   }
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
   }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(8px, -12px) rotate(6deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+.animate-floaty {
+  animation: floaty 4s ease-in-out infinite;
+}
+
+.animate-drift {
+  animation: drift 8s ease-in-out infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle 3s ease-in-out infinite;
 }

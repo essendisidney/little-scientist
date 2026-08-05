@@ -1,9 +1,23 @@
 import type { Metadata } from 'next'
+import { Inter, Poppins } from 'next/font/google'
 import './globals.css'
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+})
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Little Scientist — Book Your Visit',
-  description: 'Children\'s Science Park — Book tickets online',
+  description: 'Book general visits, birthday parties, and school trips at Little Scientist.',
 }
 
 export default function RootLayout({
@@ -12,9 +26,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, padding: 0, background: '#08081a' }}>
-        <div aria-hidden className="twinkle-stars" />
+    <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
+      <body className="min-h-screen bg-ls-bg font-[family-name:var(--font-body)] antialiased">
         {children}
       </body>
     </html>

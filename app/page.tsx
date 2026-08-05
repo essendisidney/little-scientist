@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import LandingPage from './(public)/book/LandingPage'
 
 export default function Home() {
-  redirect('/book')
+  return <LandingPage />
 }

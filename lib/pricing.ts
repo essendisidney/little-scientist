@@ -12,6 +12,15 @@ export type PriceTier = {
 }
 
 // Default pricing — can be replaced by DB lookup.
+export const BIRTHDAY_PRICING = {
+  adult18PlusKes: 1500,
+  child95cmTo17Kes: 1500,
+  childUnder95cmKes: 800,
+} as const
+
+export const BIRTHDAY_FOOD_NOTICE =
+  'Food and drinks are not included and are the responsibility of the booking party. No alcohol or drugs are allowed.'
+
 export const DEFAULT_TIERS: PriceTier[] = [
   {
     key: 'adult',
@@ -52,14 +61,21 @@ export function vatBreakdown(inclPrice: number) {
   }
 }
 
-// Compute totals for a basket
-export function computeBasket(adults: number, children: number, tiers: PriceTier[] = DEFAULT_TIERS) {
+// Compute totals for a basket (optional paid infants e.g. birthday under-95cm)
+export function computeBasket(
+  adults: number,
+  children: number,
+  tiers: PriceTier[] = DEFAULT_TIERS,
+  infants = 0,
+) {
   const adultTier = tiers.find(t => t.key === 'adult')!
   const childTier = tiers.find(t => t.key === 'child')!
+  const infantTier = tiers.find(t => t.key === 'infant')
 
   const adultTotal = adults * adultTier.priceInclVat
   const childTotal = children * childTier.priceInclVat
-  const grandTotal = adultTotal + childTotal
+  const infantTotal = infants * (infantTier?.priceInclVat ?? 0)
+  const grandTotal = adultTotal + childTotal + infantTotal
 
   const totalExcl = grandTotal / (1 + VAT_RATE)
   const totalVat = grandTotal - totalExcl
@@ -74,6 +90,9 @@ export function computeBasket(adults: number, children: number, tiers: PriceTier
     children,
     childPrice: childTier.priceInclVat,
     childTotal,
+    infants,
+    infantPrice: infantTier?.priceInclVat ?? 0,
+    infantTotal,
     totalExcl: totalExclRounded,
     totalVat: totalVatRounded,
     grandTotal,
