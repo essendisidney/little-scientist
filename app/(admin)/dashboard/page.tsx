@@ -119,6 +119,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [dateLoading, setDateLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [blockingId, setBlockingId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -174,13 +176,26 @@ export default function DashboardPage() {
   }, [selectedDate])
 
   async function toggleBlock(sessionId: string, nextBlocked: boolean) {
-    await supabase.from('sessions').update({ is_blocked: nextBlocked }).eq('id', sessionId)
-    const { data } = await supabase
+    setActionError('')
+    setBlockingId(sessionId)
+    const { data, error } = await supabase
       .from('sessions')
+      .update({
+        is_blocked: nextBlocked,
+        block_reason: nextBlocked ? 'Blocked by admin' : null,
+      })
+      .eq('id', sessionId)
       .select('id, time_slot, capacity, booked_count, is_blocked')
-      .eq('session_date', selectedDate)
-      .order('time_slot')
-    setSessions((data || []) as typeof sessions)
+      .single()
+
+    if (error || !data) {
+      setActionError(error?.message || 'Could not update this slot. Try signing out and back in.')
+      setBlockingId(null)
+      return
+    }
+
+    setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, is_blocked: nextBlocked } : s)))
+    setBlockingId(null)
   }
 
   async function exportOverview() {
@@ -344,6 +359,9 @@ export default function DashboardPage() {
                     ? 'Loading this day’s bookings…'
                     : 'Pick day / month / year, then use Next to walk through upcoming bookings.'}
                 </div>
+                {actionError && (
+                  <div style={{ fontSize: 12, color: '#f87171', marginTop: 8, fontWeight: 700 }}>{actionError}</div>
+                )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                 <button
@@ -411,6 +429,8 @@ export default function DashboardPage() {
                         </span>
                         {s.id && (
                           <button
+                            type="button"
+                            disabled={blockingId === s.id}
                             onClick={() => toggleBlock(s.id as string, !s.is_blocked)}
                             style={{
                               background: s.is_blocked ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
@@ -418,14 +438,15 @@ export default function DashboardPage() {
                               color: s.is_blocked ? '#4ade80' : '#f87171',
                               padding: '6px 10px',
                               borderRadius: 8,
-                              cursor: 'pointer',
+                              cursor: blockingId === s.id ? 'wait' : 'pointer',
                               fontSize: 12,
                               fontWeight: 900,
                               fontFamily: 'Nunito, sans-serif',
                               whiteSpace: 'nowrap',
+                              opacity: blockingId === s.id ? 0.6 : 1,
                             }}
                           >
-                            {s.is_blocked ? 'Unblock' : 'Block'}
+                            {blockingId === s.id ? 'Saving…' : s.is_blocked ? 'Unblock' : 'Block'}
                           </button>
                         )}
                       </div>
