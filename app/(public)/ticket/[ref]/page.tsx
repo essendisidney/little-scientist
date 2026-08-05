@@ -376,7 +376,7 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
           <div>🌐 littlescientist.ke</div>
         </div>
         <div style={{ marginTop: 12, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7, maxWidth: 600 }}>
-          🎟️ Tickets are non-refundable and non-transferable.
+          🎟️ Tickets sold are not refundable or transferable. For rebooking, please call customer care on 0700 101 425.
           <br />
           🚫 Little Scientist is a drug and alcohol free environment.
           <br />

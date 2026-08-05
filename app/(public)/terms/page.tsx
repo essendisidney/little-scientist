@@ -12,6 +12,7 @@ export default function TermsPage() {
 
       <ol className="list-decimal space-y-4 pl-5 text-sm leading-relaxed sm:text-base">
         <li>Bookings are confirmed only after successful payment or written confirmation from Little Scientist.</li>
+        <li>Tickets sold are not refundable or transferable. For rebooking, please call customer care on 0700 101 425.</li>
         <li>Adults may enter only when accompanied by children. Minors may enter only when accompanied by adults.</li>
         <li>Alcohol and drugs are strictly prohibited on site.</li>
         <li>Outside food and drinks are not allowed for general visits. For birthday and school bookings, food and drinks are the responsibility of the booking party. There is no restaurant on site.</li>

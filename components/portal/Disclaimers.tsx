@@ -1,4 +1,8 @@
+const TICKET_POLICY =
+  'Tickets sold are not refundable or transferable. For rebooking, please call customer care on 0700 101 425.'
+
 const GENERAL_RULES = [
+  TICKET_POLICY,
   'No entry for adults unless accompanied by children.',
   'No entry for minors unless accompanied by adults.',
   'No alcohol or drugs.',
@@ -7,6 +11,7 @@ const GENERAL_RULES = [
 ]
 
 const GROUP_RULES = [
+  TICKET_POLICY,
   'No entry for adults unless accompanied by children.',
   'No entry for minors unless accompanied by adults.',
   'No alcohol or drugs.',
