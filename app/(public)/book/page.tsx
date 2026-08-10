@@ -1078,7 +1078,7 @@ export default function BookPage() {
             </div>
           </div>
 
-          {(step === 'date' || step === 'slot' || step === 'count' || step === 'payment') && (
+          {(step === 'date' || step === 'slot') && (
             <div style={{ maxWidth: 600, margin: '16px auto 0', padding: '0 20px' }}>
               <Disclaimers compact />
             </div>
@@ -1109,7 +1109,7 @@ export default function BookPage() {
           <div className="bcard">
             {step === 'date' && (
               <>
-                <div className="spill">📅 Step 1 of 3 · {visitTypeLabel(visitType)}</div>
+                <div className="spill">📅 Pick a day</div>
                 <h2 className="stitle">
                   {visitType === 'birthday'
                     ? 'Pick a party day'
@@ -1202,7 +1202,7 @@ export default function BookPage() {
                 <button className="btn-back" onClick={() => setStep('date')}>
                   ← Back
                 </button>
-                <div className="spill">🕙 Step 1 of 3</div>
+                <div className="spill">🕙 Pick a time</div>
                 <h2 className="stitle">
                   Pick your <span>session time</span>
                 </h2>
@@ -1296,8 +1296,7 @@ export default function BookPage() {
                   ← Back
                 </button>
                 <div className="spill">
-                  {visitType === 'birthday' ? '🎂' : visitType === 'school' ? '🏫' : '👨‍👩‍👧‍👦'} Step 2 of 3 ·{' '}
-                  {visitTypeLabel(visitType)}
+                  {visitType === 'birthday' ? '🎂 Party details' : visitType === 'school' ? '🏫 School details' : '👨‍👩‍👧‍👦 Visitors & pay'}
                 </div>
                 <h2 className="stitle">
                   {visitType === 'birthday'
@@ -1645,10 +1644,58 @@ export default function BookPage() {
                         ).toLocaleString()}
                       </div>
                     </div>
-                    {error && <div className="err">{error}</div>}
-                    <button className="btn-go" onClick={proceedFromCountersToPayment}>
-                      Continue to payment →
-                    </button>
+
+                    {visitType === 'general' && (
+                      <>
+                        <p className="ssub" style={{ marginTop: 8 }}>
+                          Almost done — enter your M-Pesa number and pay.
+                        </p>
+                        <input
+                          className="inp"
+                          placeholder="Your name (optional)"
+                          value={name}
+                          onChange={e => setName(e.target.value)}
+                        />
+                        <input
+                          className="inp"
+                          placeholder="M-Pesa number e.g. 0700 101 425"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value)}
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                        />
+                        <TermsGate
+                          checked={termsRead}
+                          onCheckedChange={v => {
+                            setTermsRead(v)
+                            setTermsConsent(v)
+                          }}
+                        />
+                        {error && <div className="err">{error}</div>}
+                        <button
+                          type="button"
+                          className="btn-go"
+                          onClick={handlePayment}
+                          disabled={loading || !termsRead}
+                        >
+                          {loading
+                            ? 'Sending M-Pesa…'
+                            : !termsRead
+                              ? 'Tick the box above to pay'
+                              : `Pay KES ${total.toLocaleString()} with M-Pesa`}
+                        </button>
+                      </>
+                    )}
+
+                    {visitType !== 'general' && (
+                      <>
+                        {error && <div className="err">{error}</div>}
+                        <button className="btn-go" onClick={proceedFromCountersToPayment}>
+                          Continue to payment →
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -1660,11 +1707,9 @@ export default function BookPage() {
                 <button className="btn-back" onClick={() => setStep('count')}>
                   ← Back
                 </button>
-                <div className="spill">💳 Step 2 of 3</div>
-                <h2 className="stitle">Payment</h2>
-                <p className="ssub">
-                  M-Pesa (Direct Safaricom Paybill) or Card (Visa/MasterCard through payment gateway).
-                </p>
+                <div className="spill">💳 Almost done</div>
+                <h2 className="stitle">Pay with M-Pesa</h2>
+                <p className="ssub">You’ll get an STK prompt on your phone — enter your PIN to finish.</p>
 
                 <div className="sum">
                   <h4>Booking summary</h4>
@@ -1793,6 +1838,8 @@ export default function BookPage() {
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                 />
 
                 <TermsGate
@@ -1803,61 +1850,19 @@ export default function BookPage() {
                   }}
                 />
 
-                {!termsRead && (
-                  <div className="warn" style={{ marginTop: 4 }}>
-                    Read and confirm the Terms and Conditions above to unlock M-Pesa payment.
-                  </div>
-                )}
-
                 {error && <div className="err">{error}</div>}
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <button
-                    type="button"
-                    onClick={handlePayment}
-                    disabled={loading || !termsRead}
-                    style={{
-                      width: '100%',
-                      background: 'linear-gradient(135deg, #FFD94A, #FFC107)',
-                      border: '1px solid rgba(255,217,74,0.35)',
-                      color: '#08122e',
-                      borderRadius: 10,
-                      padding: '14px 14px',
-                      cursor: loading || !termsRead ? 'not-allowed' : 'pointer',
-                      fontFamily: "'Plus Jakarta Sans', sans-serif",
-                      fontWeight: 700,
-                      fontSize: 14,
-                      textAlign: 'center',
-                      opacity: !termsRead ? 0.55 : 1,
-                    }}
-                  >
-                    {loading
-                      ? 'Sending…'
-                      : !termsRead
-                        ? 'Confirm terms to pay with M-Pesa'
-                        : `Pay KES ${basket.grandTotalFormatted} — M-Pesa`}
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    title="Card payments via gateway — coming soon"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(46,142,255,0.22)',
-                      color: '#fff',
-                      borderRadius: 10,
-                      padding: '14px 14px',
-                      cursor: 'not-allowed',
-                      fontFamily: "'Plus Jakarta Sans', sans-serif",
-                      fontWeight: 700,
-                      fontSize: 14,
-                      textAlign: 'center',
-                      opacity: 0.55,
-                    }}
-                  >
-                    {`Pay KES ${basket.grandTotalFormatted} — Card (Visa/MasterCard gateway)`}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="btn-go"
+                  onClick={handlePayment}
+                  disabled={loading || !termsRead}
+                >
+                  {loading
+                    ? 'Sending M-Pesa…'
+                    : !termsRead
+                      ? 'Tick the box above to pay'
+                      : `Pay KES ${basket.grandTotalFormatted} with M-Pesa`}
+                </button>
                 <button className="btn-ghost" onClick={() => setStep('count')}>
                   ← Change visitors
                 </button>
@@ -1870,7 +1875,7 @@ export default function BookPage() {
 
             {step === 'pending' && (
               <div className="pend">
-                <div className="spill">📱 Step 2 of 3</div>
+                <div className="spill">📱 Enter your PIN on your phone</div>
                 <div className="big">📱</div>
                 <h2>Check your phone!</h2>
                 <p>
