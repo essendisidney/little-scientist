@@ -1803,6 +1803,12 @@ export default function BookPage() {
                   }}
                 />
 
+                {!termsRead && (
+                  <div className="warn" style={{ marginTop: 4 }}>
+                    Read and confirm the Terms and Conditions above to unlock M-Pesa payment.
+                  </div>
+                )}
+
                 {error && <div className="err">{error}</div>}
                 <div style={{ display: 'grid', gap: 10 }}>
                   <button
@@ -1826,7 +1832,9 @@ export default function BookPage() {
                   >
                     {loading
                       ? 'Sending…'
-                      : `Pay KES ${basket.grandTotalFormatted} — M-Pesa (Direct Safaricom Paybill)`}
+                      : !termsRead
+                        ? 'Confirm terms to pay with M-Pesa'
+                        : `Pay KES ${basket.grandTotalFormatted} — M-Pesa`}
                   </button>
                   <button
                     type="button"
