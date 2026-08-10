@@ -3,17 +3,34 @@ const DARAJA_BASE =
     ? 'https://api.safaricom.co.ke'
     : 'https://sandbox.safaricom.co.ke'
 
+async function readJsonSafe(res: Response, label: string) {
+  const text = await res.text()
+  if (!text?.trim()) {
+    throw new Error(`${label} returned an empty response (${res.status}). Check M-Pesa credentials and try again.`)
+  }
+  try {
+    return JSON.parse(text) as Record<string, unknown>
+  } catch {
+    throw new Error(`${label} returned an invalid response (${res.status}). Please try again shortly.`)
+  }
+}
+
 export async function getMpesaToken(): Promise<string> {
-  const auth = Buffer.from(
-    `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`
-  ).toString('base64')
-  const res = await fetch(
-    `${DARAJA_BASE}/oauth/v1/generate?grant_type=client_credentials`,
-    { headers: { Authorization: `Basic ${auth}` } }
-  )
-  const data = await res.json()
-  if (!data.access_token) throw new Error('Failed to get M-Pesa token')
-  return data.access_token
+  const key = process.env.MPESA_CONSUMER_KEY?.trim()
+  const secret = process.env.MPESA_CONSUMER_SECRET?.trim()
+  if (!key || !secret) {
+    throw new Error('M-Pesa is not configured on the server (missing consumer key/secret).')
+  }
+
+  const auth = Buffer.from(`${key}:${secret}`).toString('base64')
+  const res = await fetch(`${DARAJA_BASE}/oauth/v1/generate?grant_type=client_credentials`, {
+    headers: { Authorization: `Basic ${auth}` },
+  })
+  const data = await readJsonSafe(res, 'M-Pesa auth')
+  if (!data.access_token) {
+    throw new Error('Failed to get M-Pesa token. Check MPESA_ENV and consumer credentials.')
+  }
+  return String(data.access_token)
 }
 
 export function normalizePhone(phone: string): string {
@@ -25,13 +42,18 @@ export function normalizePhone(phone: string): string {
 }
 
 function getTimestampAndPassword() {
+  const shortcode = process.env.MPESA_SHORTCODE?.trim()
+  const passkey = process.env.MPESA_PASSKEY?.trim()
+  if (!shortcode || !passkey) {
+    throw new Error('M-Pesa is not configured on the server (missing shortcode/passkey).')
+  }
   const timestamp = new Date()
     .toISOString()
     .replace(/[^0-9]/g, '')
     .slice(0, 14)
-  const raw = `${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`
+  const raw = `${shortcode}${passkey}${timestamp}`
   const password = Buffer.from(raw).toString('base64')
-  return { timestamp, password }
+  return { timestamp, password, shortcode }
 }
 
 export async function initiateSTKPush({
@@ -47,8 +69,12 @@ export async function initiateSTKPush({
   description: string
   callbackUrl: string
 }) {
+  if (!callbackUrl?.startsWith('https://')) {
+    throw new Error('M-Pesa callback URL must be a public HTTPS address.')
+  }
+
   const token = await getMpesaToken()
-  const { timestamp, password } = getTimestampAndPassword()
+  const { timestamp, password, shortcode } = getTimestampAndPassword()
 
   const res = await fetch(`${DARAJA_BASE}/mpesa/stkpush/v1/processrequest`, {
     method: 'POST',
@@ -57,13 +83,13 @@ export async function initiateSTKPush({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      BusinessShortCode: process.env.MPESA_SHORTCODE,
+      BusinessShortCode: shortcode,
       Password: password,
       Timestamp: timestamp,
       TransactionType: 'CustomerPayBillOnline',
       Amount: Math.ceil(amount),
       PartyA: normalizePhone(phone),
-      PartyB: process.env.MPESA_SHORTCODE,
+      PartyB: shortcode,
       PhoneNumber: normalizePhone(phone),
       CallBackURL: callbackUrl,
       AccountReference: reference.slice(0, 12),
@@ -71,14 +97,14 @@ export async function initiateSTKPush({
     }),
   })
 
-  const data = await res.json()
-  if (data.ResponseCode !== '0') {
-    throw new Error(data.ResponseDescription || 'STK Push failed')
+  const data = await readJsonSafe(res, 'M-Pesa STK')
+  if (String(data.ResponseCode) !== '0') {
+    throw new Error(String(data.ResponseDescription || data.errorMessage || 'STK Push failed'))
   }
 
   return {
-    checkoutRequestId: data.CheckoutRequestID as string,
-    merchantRequestId: data.MerchantRequestID as string,
+    checkoutRequestId: String(data.CheckoutRequestID || ''),
+    merchantRequestId: String(data.MerchantRequestID || ''),
   }
 }
 

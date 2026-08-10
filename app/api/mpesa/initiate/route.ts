@@ -5,6 +5,8 @@ import { normalizeParty, partyHeadcount, validatePaidCheckout } from '@/lib/book
 import { parseVisitType } from '@/lib/visit-type'
 import { BIRTHDAY_PRICING } from '@/lib/pricing'
 import { sessionOpenSpots } from '@/lib/session-capacity'
+import { createAndSendKcbPayment } from '@/lib/kcb/service'
+import { isKcbConfigured } from '@/lib/kcb/config'
 
 const DEFAULT_ADULT_PRICE = 1000
 const DEFAULT_CHILD_PRICE = 800
@@ -149,6 +151,67 @@ export async function POST(req: NextRequest) {
     const stkDescription =
       bookingKind === 'birthday' ? 'LS Birthday' : bookingKind === 'school' ? 'LS School Trip' : 'LS Tickets'
 
+    // Prefer KCB BUNI when configured, unless PAYMENT_PROVIDER=daraja forces Safaricom.
+    const provider = (process.env.PAYMENT_PROVIDER || 'auto').toLowerCase()
+    const useKcb =
+      provider === 'kcb' || (provider !== 'daraja' && isKcbConfigured())
+
+    if (useKcb) {
+      if (!isKcbConfigured()) {
+        return NextResponse.json({ error: 'KCB payment gateway is not configured' }, { status: 503 })
+      }
+
+      try {
+        const kcb = await createAndSendKcbPayment({
+          amount: total,
+          phoneNumber: phone,
+          reference: booking.booking_ref,
+          description: stkDescription,
+          idempotencyKey: `booking:${booking.id}`,
+          sourceType: 'booking',
+          sourceId: booking.id,
+        })
+
+        await supabaseAdmin.from('payments').insert({
+          booking_id: booking.id,
+          payment_channel: 'kcb_buni',
+          amount_kes: total,
+          mpesa_checkout_request_id: kcb.payment.kcb_reference,
+          mpesa_merchant_request_id: kcb.payment.merchant_request_id || null,
+          mpesa_phone: phone,
+          status: 'processing',
+        })
+
+        await supabaseAdmin.from('audit_log').insert({
+          action: 'PAYMENT_INITIATED',
+          entity: 'bookings',
+          entity_id: booking.id,
+          performed_by: 'public',
+          metadata: { booking_kind: bookingKind, party_meta: partyMeta, provider: 'kcb_buni' },
+        })
+
+        return NextResponse.json({
+          success: true,
+          bookingRef: booking.booking_ref,
+          bookingId: booking.id,
+          checkoutRequestId: kcb.payment.kcb_reference,
+          provider: 'kcb',
+        })
+      } catch (kcbErr) {
+        // If KCB fails and Daraja is available, fall back so guests can still pay.
+        const hasDaraja = Boolean(
+          process.env.MPESA_CONSUMER_KEY?.trim() &&
+            process.env.MPESA_CONSUMER_SECRET?.trim() &&
+            process.env.MPESA_SHORTCODE?.trim() &&
+            process.env.MPESA_PASSKEY?.trim(),
+        )
+        if (!hasDaraja || provider === 'kcb') {
+          throw kcbErr
+        }
+        console.error('KCB initiate failed, falling back to Daraja:', kcbErr instanceof Error ? kcbErr.message : kcbErr)
+      }
+    }
+
     const callbackUrl = process.env.MPESA_CALLBACK_URL || `${process.env.NEXT_PUBLIC_APP_URL}/api/mpesa/callback`
 
     const stk = await initiateSTKPush({
@@ -174,7 +237,7 @@ export async function POST(req: NextRequest) {
       entity: 'bookings',
       entity_id: booking.id,
       performed_by: 'public',
-      metadata: { booking_kind: bookingKind, party_meta: partyMeta },
+      metadata: { booking_kind: bookingKind, party_meta: partyMeta, provider: 'daraja' },
     })
 
     return NextResponse.json({
@@ -182,12 +245,14 @@ export async function POST(req: NextRequest) {
       bookingRef: booking.booking_ref,
       bookingId: booking.id,
       checkoutRequestId: stk.checkoutRequestId,
+      provider: 'daraja',
     })
   } catch (err) {
     console.error('Initiate error:', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Payment initiation failed' },
-      { status: 500 },
-    )
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : 'Payment initiation failed. Please try again or call 0700 101 425.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

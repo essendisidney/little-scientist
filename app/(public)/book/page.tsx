@@ -544,12 +544,28 @@ export default function BookPage() {
           partyMeta,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Payment failed')
+      const raw = await res.text()
+      let data: { error?: string; bookingRef?: string } = {}
+      if (raw.trim()) {
+        try {
+          data = JSON.parse(raw) as typeof data
+        } catch {
+          throw new Error('Payment service returned an unexpected response. Please try again.')
+        }
+      } else if (!res.ok) {
+        throw new Error('Payment service is temporarily unavailable. Please try again or call 0700 101 425.')
+      }
+      if (!res.ok) throw new Error(data.error || 'Payment failed. Please try again.')
+      if (!data.bookingRef) throw new Error('Payment started but no booking reference was returned.')
       setBookingRef(data.bookingRef)
       setStep('pending')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      const msg = e instanceof Error ? e.message : 'Something went wrong'
+      setError(
+        /unexpected end of json|json input/i.test(msg)
+          ? 'Payment service did not respond. Please try again or call 0700 101 425.'
+          : msg,
+      )
     } finally {
       setLoading(false)
     }
