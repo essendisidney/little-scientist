@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { parseMpesaCallback } from '@/lib/mpesa'
 import { postTicketPayment } from '@/lib/accounting'
+import { notifyBookingPaid } from '@/lib/booking-notify'
 
 export async function POST(req: NextRequest) {
   try {
@@ -94,6 +95,8 @@ export async function POST(req: NextRequest) {
           amount: booking.total_amount_kes,
         },
       })
+
+      await notifyBookingPaid(booking.id as string, mpesaReceiptNumber)
     } else {
       await supabaseAdmin
         .from('payments')

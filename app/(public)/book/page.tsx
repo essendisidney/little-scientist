@@ -122,6 +122,7 @@ export default function BookPage() {
   const [partyModal, setPartyModal] = useState<Extract<PartyValidation, { ok: false }> | null>(null)
   const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
+  const [bookerEmail, setBookerEmail] = useState('')
   const [termsRead, setTermsRead] = useState(false)
   const [termsConsent, setTermsConsent] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -142,6 +143,8 @@ export default function BookPage() {
   // Enquiry outcome inside /book
   const [enquiryDone, setEnquiryDone] = useState(false)
   const [enquiryRef, setEnquiryRef] = useState('')
+  /** Pending STK: guest waited too long without paid — show recovery actions. */
+  const [pendingTimedOut, setPendingTimedOut] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -369,24 +372,64 @@ export default function BookPage() {
 
   const pollStatus = useCallback(() => {
     if (!bookingRef) return
+    const startedAt = Date.now()
+    const PENDING_TIMEOUT_MS = 90_000
+    const RETRYABLE = new Set(['failed', 'cancelled', 'canceled', 'timeout', 'expired'])
+
+    const payRetryStep = (): Step => (visitType === 'general' ? 'count' : 'payment')
+
     const iv = setInterval(async () => {
-      const { data } = await supabase.from('bookings').select('payment_status').eq('booking_ref', bookingRef).single()
-      if (data?.payment_status === 'paid') {
-        clearInterval(iv)
-        window.location.href = `/ticket/${bookingRef}`
+      try {
+        const res = await fetch(`/api/bookings/status?ref=${encodeURIComponent(bookingRef)}`)
+        const data = (await res.json().catch(() => null)) as { paymentStatus?: string } | null
+        const status = String(data?.paymentStatus || '').toLowerCase()
+
+        if (status === 'paid') {
+          clearInterval(iv)
+          window.location.href = `/ticket/${bookingRef}`
+          return
+        }
+
+        if (RETRYABLE.has(status)) {
+          clearInterval(iv)
+          setPendingTimedOut(false)
+          if (status === 'cancelled' || status === 'canceled') {
+            setError('Payment cancelled on the phone. You can try again.')
+          } else if (status === 'timeout' || status === 'expired') {
+            setError('The M-Pesa prompt timed out. Try again or check the number.')
+          } else {
+            setError('Payment failed. Try again.')
+          }
+          setStep(payRetryStep())
+          return
+        }
+      } catch {
+        /* keep polling */
       }
-      if (data?.payment_status === 'failed') {
-        clearInterval(iv)
-        setError('Payment failed. Try again.')
-        setStep('payment')
+
+      if (Date.now() - startedAt >= PENDING_TIMEOUT_MS) {
+        setPendingTimedOut(true)
       }
     }, 3000)
     return () => clearInterval(iv)
-  }, [bookingRef])
+  }, [bookingRef, visitType])
 
   useEffect(() => {
-    if (step === 'pending') return pollStatus()
+    if (step !== 'pending') return
+    setPendingTimedOut(false)
+    return pollStatus()
   }, [step, pollStatus])
+
+  function goToPayFields() {
+    setError('')
+    setPendingTimedOut(false)
+    setStep(visitType === 'general' ? 'count' : 'payment')
+  }
+
+  async function retryPaymentFromPending() {
+    setPendingTimedOut(false)
+    await handlePayment()
+  }
 
   const activePricing: Pricing =
     visitType === 'birthday'
@@ -527,7 +570,9 @@ export default function BookPage() {
                 notes: partyNotes || null,
                 sessionMode: 'shared',
               }
-            : null
+            : bookerEmail.trim().includes('@')
+              ? { email: bookerEmail.trim() }
+              : null
 
       const res = await fetch('/api/mpesa/initiate', {
         method: 'POST',
@@ -536,7 +581,7 @@ export default function BookPage() {
           sessionId,
           phone,
           name: bookerName,
-          email: visitType === 'birthday' ? birthdayEmail.trim() : undefined,
+          email: visitType === 'birthday' ? birthdayEmail.trim() : bookerEmail.trim() || undefined,
           adultCount,
           childCount,
           infantCount,
@@ -1116,7 +1161,7 @@ export default function BookPage() {
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: 600, lineHeight: 1.7 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 99, background: '#FFD94A' }} />
-                📱 M-Pesa prompt sent to {phone || 'your phone'} — enter your PIN now
+                M-Pesa prompt sent to {phone || 'your phone'} — enter your PIN now
               </span>
             </div>
           )}
@@ -1674,6 +1719,14 @@ export default function BookPage() {
                         />
                         <input
                           className="inp"
+                          placeholder="Email for tickets (optional)"
+                          value={bookerEmail}
+                          onChange={e => setBookerEmail(e.target.value)}
+                          type="email"
+                          autoComplete="email"
+                        />
+                        <input
+                          className="inp"
                           placeholder="M-Pesa number e.g. 0700 101 425"
                           value={phone}
                           onChange={e => setPhone(e.target.value)}
@@ -1848,6 +1901,16 @@ export default function BookPage() {
                     type="email"
                   />
                 )}
+                {visitType === 'general' && (
+                  <input
+                    className="inp"
+                    placeholder="Email for tickets (optional)"
+                    value={bookerEmail}
+                    onChange={e => setBookerEmail(e.target.value)}
+                    type="email"
+                    autoComplete="email"
+                  />
+                )}
                 <input
                   className="inp"
                   placeholder="M-Pesa number e.g. 0700 101 425"
@@ -1891,24 +1954,51 @@ export default function BookPage() {
 
             {step === 'pending' && (
               <div className="pend">
-                <div className="spill">📱 Enter your PIN on your phone</div>
-                <div className="big">📱</div>
-                <h2>Check your phone!</h2>
+                <div className="spill">Enter your PIN on your phone</div>
+                <h2>Check your phone</h2>
                 <p>
                   Prompt sent to{' '}
                   <strong style={{ color: '#FFD94A', fontSize: 20 }}>{phone}</strong>
                 </p>
                 <p style={{ marginTop: 14 }}>
-                  Enter your PIN to confirm
+                  Enter your M-Pesa PIN to confirm
                   <br />
                   <strong style={{ color: '#FFD94A', fontSize: 24 }}>KES {total.toLocaleString()}</strong>
                 </p>
-                <div className="dots">
-                  <span className="dot d1" />
-                  <span className="dot d2" />
-                  <span className="dot d3" />
+                {!pendingTimedOut && (
+                  <div className="dots">
+                    <span className="dot d1" />
+                    <span className="dot d2" />
+                    <span className="dot d3" />
+                  </div>
+                )}
+                {pendingTimedOut ? (
+                  <p style={{ marginTop: 18, fontSize: 15, color: 'rgba(255,255,255,0.55)', maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
+                    Still waiting for confirmation. If you did not get a prompt, check the number or try again.
+                  </p>
+                ) : (
+                  <p style={{ marginTop: 18, fontSize: 14, color: 'rgba(255,255,255,0.35)', maxWidth: 360, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.65 }}>
+                    Usually takes 30–60 seconds. If nothing appears, check you entered the M-Pesa number correctly.
+                  </p>
+                )}
+                {error && (
+                  <div className="err" style={{ maxWidth: 360, margin: '16px auto 0', textAlign: 'left' }}>
+                    {error}
+                  </div>
+                )}
+                <div style={{ marginTop: 22, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
+                  <button
+                    type="button"
+                    className="btn-go"
+                    onClick={() => void retryPaymentFromPending()}
+                    disabled={loading}
+                  >
+                    {loading ? 'Sending M-Pesa…' : 'Try again'}
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={goToPayFields}>
+                    Change number
+                  </button>
                 </div>
-                <p style={{ marginTop: 18, fontSize: 14, color: 'rgba(255,255,255,0.22)' }}>Usually takes 30–60 seconds</p>
               </div>
             )}
 

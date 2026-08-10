@@ -1,0 +1,10 @@
+{
+  "phoneNumber": "254712123456",
+  "amount": "1",
+  "invoiceNumber": "8068418-LS-TEST-001",
+  "sharedShortCode": false,
+  "orgShortCode": "522533",
+  "orgPassKey": "",
+  "callbackUrl": "https://example.com/api/kcb/mpesa/callback",
+  "transactionDescription": "LS booking"
+}

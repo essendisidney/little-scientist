@@ -1,0 +1,13 @@
+{
+  "response": {
+    "MerchantRequestID": "16813-1590513-1",
+    "ResponseCode": 0,
+    "CustomerMessage": "Success. Request accepted for processing",
+    "CheckoutRequestID": "ws_CO_271020211535314658",
+    "ResponseDescription": "Accept the service request successfully."
+  },
+  "header": {
+    "statusDescription": "Success",
+    "statusCode": "0"
+  }
+}
