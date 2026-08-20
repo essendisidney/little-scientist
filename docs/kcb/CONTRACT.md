@@ -55,7 +55,7 @@ OAuth is **not** defined as a path in the MpesaExpress Swagger. Security schemes
 |-------|------|-----|-------|
 | `phoneNumber` | string | 12 | `2547XXXXXXXX` |
 | `amount` | string | 18 | No decimals |
-| `invoiceNumber` | string | 24 | Schema max 24; description also says max 12 for display — keep short |
+| `invoiceNumber` | string | 24 | **KCB guidance:** `{till/account}-{reference}` or `{till/account}#{reference}` (e.g. `8068418-LSTEST001`) |
 | `sharedShortCode` | boolean | — | `true` → OrgShortCode/OrgPassKey replaced with internal values |
 | `orgShortCode` | string | 12 | 5–6 digit org receiving funds |
 | `orgPassKey` | string | — | Password for encrypting request; may be `""` |

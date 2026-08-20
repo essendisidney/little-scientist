@@ -92,20 +92,20 @@ describe('mapToKcbStkRequest', () => {
     process.env = { ...env }
   })
 
-  it('maps shared-shortcode sandbox body without paybill account prefix', () => {
+  it('maps shared-shortcode invoice as account-ref', () => {
     process.env.KCB_SHARED_SHORT_CODE = 'true'
     process.env.KCB_ORG_SHORT_CODE = '522522'
     const body = mapToKcbStkRequest({
       amount: 50,
       phoneNumber: '254712123456',
-      reference: 'ORDER-123',
+      reference: 'LSTEST001',
       description: 'Payment for booking visit',
     })
     expect(body.sharedShortCode).toBe(true)
     expect(body.orgShortCode).toBe('')
     expect(body.orgPassKey).toBe('')
-    expect(body.invoiceNumber).toBe('ORDER-123')
-    expect(body.invoiceNumber).not.toMatch(/^8068418/)
+    expect(body.invoiceNumber).toBe('8068418-LSTEST001')
+    expect(body.invoiceNumber.length).toBeLessThanOrEqual(24)
     expect(body.transactionDescription.length).toBeLessThanOrEqual(13)
   })
 

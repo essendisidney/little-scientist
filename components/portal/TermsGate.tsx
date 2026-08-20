@@ -54,7 +54,7 @@ export default function TermsGate({
             Terms and Conditions
           </a>
           {' '}
-          (tickets are non-refundable; for rebooking call 0700 101 425).{' '}
+          (tickets are non-refundable or transferable).{' '}
           <a
             href={TERMS_PDF}
             target="_blank"

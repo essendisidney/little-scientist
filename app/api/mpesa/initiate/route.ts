@@ -151,10 +151,11 @@ export async function POST(req: NextRequest) {
     const stkDescription =
       bookingKind === 'birthday' ? 'LS Birthday' : bookingKind === 'school' ? 'LS School Trip' : 'LS Tickets'
 
-    // Prefer KCB BUNI when configured, unless PAYMENT_PROVIDER=daraja forces Safaricom.
-    const provider = (process.env.PAYMENT_PROVIDER || 'auto').toLowerCase()
+    // Prefer KCB BUNI when configured. Empty/auto falls back to Daraja only if KCB is not configured
+    // or explicitly PAYMENT_PROVIDER=auto|daraja. Force kcb with PAYMENT_PROVIDER=kcb (no Daraja fallback).
+    const provider = (process.env.PAYMENT_PROVIDER || (isKcbConfigured() ? 'kcb' : 'daraja')).toLowerCase()
     const useKcb =
-      provider === 'kcb' || (provider !== 'daraja' && isKcbConfigured())
+      provider === 'kcb' || (provider === 'auto' && isKcbConfigured())
 
     if (useKcb) {
       if (!isKcbConfigured()) {

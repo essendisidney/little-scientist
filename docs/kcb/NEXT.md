@@ -8,16 +8,19 @@ There is **no** `card-ipg.swagger.json` in this folder yet.
 
 Until then, checkout remains **M-Pesa only**.
 
-## Production M-Pesa (blocked until keys work)
+## Production M-Pesa
 
-Sandbox STK works with sandbox consumer keys. Production `client_credentials` previously returned `invalid_client`.
+**Client id casing:** Production Consumer Key is `…NAsh…` (lowercase `h`). Using `…NAsH…` causes `invalid_client`.
 
-Next ops steps:
+**Token:** `https://accounts.buni.kcbgroup.com/oauth2/token` + `grant_type=client_credentials` works with the Production keys.
 
-1. BUNI → Production Keys → **CURL TO GENERATE ACCESS TOKEN** with `grant_type=client_credentials`  
-2. Confirm curl returns `access_token`  
-3. Set Vercel `KCB_ENVIRONMENT=production`, production token/STK URLs, and working production client id/secret  
-4. Set `KCB_SHARED_SHORT_CODE=false` and Paybill `522533` only after go-live confirms merchant settlement  
+**STK host:** As of last probe, `https://buni.kcbgroup.com/mm/api/request/1.0.0/stkpush` returns **404**. Production app tokens are accepted by the **UAT** STK path:
+
+`https://uat.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush`
+
+Portal “CURL TO GENERATE ACCESS TOKEN” may show `grant_type=password` placeholders — the server should still use **client_credentials**.
+
+**Paybill 522533:** Own shortcode still returns “Merchant does not exist” until BUNI go-live provisions it. Shared shortcode + empty `orgShortCode` is the working STK shape.
 
 ## SMS tickets
 

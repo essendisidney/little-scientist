@@ -80,22 +80,12 @@ export function mapToKcbStkRequest(validated: {
   description: string
 }): KcbStkPushRequest {
   const config = getKcbConfig()
-  const ref = validated.reference.replace(/[^A-Za-z0-9-]/g, '').slice(0, 20) || 'LS'
-
-  let invoiceNumber: string
-  if (config.sharedShortCode) {
-    // Shared shortcode (522522): invoiceNumber is the settlement / merchant reference
-    // on KCB's shared paybill. Do NOT prefix the production Paybill account 8068418 —
-    // that is for org shortcode 522533 and causes "Merchant does not exist" on sandbox.
-    // Published sandbox samples use a plain alphanumeric invoice (e.g. "1234567890").
-    invoiceNumber = ref.slice(0, INVOICE_MAX)
-  } else {
-    // Own Paybill / Till: account number + booking ref for CustomerPayBillOnline.
-    const account = config.accountNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, 12)
-    const refBudget = Math.max(0, INVOICE_MAX - account.length - 1)
-    const shortRef = ref.slice(0, refBudget)
-    invoiceNumber = `${account}-${shortRef}`.slice(0, INVOICE_MAX)
-  }
+  // KCB: invoiceNumber = till/account + "-" or "#" + your reference (e.g. 8068418-LSTEST001).
+  const account = config.accountNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, 12) || '8068418'
+  const refBudget = Math.max(0, INVOICE_MAX - account.length - 1)
+  const ref =
+    validated.reference.replace(/[^A-Za-z0-9-]/g, '').slice(0, refBudget) || 'LS'
+  const invoiceNumber = `${account}-${ref}`.slice(0, INVOICE_MAX)
 
   return {
     phoneNumber: validated.phoneNumber,
