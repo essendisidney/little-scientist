@@ -39,11 +39,13 @@ export function getKcbConfig(): KcbConfig {
     throw new KcbConfigError('KCB_ENVIRONMENT must be sandbox or production')
   }
 
+  // Production token host is accounts.buni (oauth2). buni.kcbgroup.com/token returns HTML/404.
+  // Production STK host still 404s; UAT stkpush accepts production tokens until BUNI go-live.
   const defaults =
     environment === 'production'
       ? {
-          tokenUrl: 'https://buni.kcbgroup.com/token?grant_type=client_credentials',
-          mpesaExpressUrl: 'https://buni.kcbgroup.com/mm/api/request/1.0.0/stkpush',
+          tokenUrl: 'https://accounts.buni.kcbgroup.com/oauth2/token',
+          mpesaExpressUrl: 'https://uat.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush',
         }
       : {
           tokenUrl: 'https://uat.buni.kcbgroup.com/token?grant_type=client_credentials',

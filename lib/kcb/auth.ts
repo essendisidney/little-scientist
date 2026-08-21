@@ -57,7 +57,15 @@ export async function getKcbAccessToken(opts?: { forceRefresh?: boolean }): Prom
   try {
     data = JSON.parse(text) as typeof data
   } catch {
-    throw new KcbAuthError('KCB token response was not JSON', { status: res.status })
+    const hint =
+      res.status === 404
+        ? ' — check KCB_TOKEN_URL (use https://accounts.buni.kcbgroup.com/oauth2/token)'
+        : res.status >= 500
+          ? ' — KCB auth gateway error'
+          : ''
+    throw new KcbAuthError(`KCB token response was not JSON (HTTP ${res.status})${hint}`, {
+      status: res.status,
+    })
   }
 
   if (!res.ok || !data.access_token) {
