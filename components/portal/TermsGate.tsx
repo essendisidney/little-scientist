@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { VisitType } from '@/lib/visit-type'
 
 const WAIVER_PDF: Record<VisitType, string> = {
@@ -15,8 +16,7 @@ const WAIVER_LABEL: Record<VisitType, string> = {
 }
 
 /**
- * Simple one-tap waiver acceptance.
- * Link opens the visit-specific PDF; checkbox alone is enough to continue.
+ * Waiver acceptance: opening the visit PDF is required before the checkbox unlocks.
  */
 export default function TermsGate({
   checked,
@@ -29,6 +29,27 @@ export default function TermsGate({
 }) {
   const pdfHref = WAIVER_PDF[visitType]
   const label = WAIVER_LABEL[visitType]
+  const [opened, setOpened] = useState(false)
+  const prevVisit = useRef(visitType)
+
+  useEffect(() => {
+    if (prevVisit.current === visitType) return
+    prevVisit.current = visitType
+    setOpened(false)
+    if (checked) onCheckedChange(false)
+  }, [visitType, checked, onCheckedChange])
+
+  function openWaiver(e: MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    window.open(pdfHref, '_blank', 'noopener,noreferrer')
+    setOpened(true)
+  }
+
+  function onCheckChange(next: boolean) {
+    if (next && !opened) return
+    onCheckedChange(next)
+  }
 
   return (
     <div
@@ -40,13 +61,26 @@ export default function TermsGate({
         padding: '14px 16px',
       }}
     >
+      {!opened && (
+        <p
+          style={{
+            margin: '0 0 12px',
+            color: 'rgba(255,217,74,0.9)',
+            fontSize: 13,
+            fontWeight: 600,
+            lineHeight: 1.4,
+          }}
+        >
+          Open and read the waiver below before you can accept.
+        </p>
+      )}
       <label
         style={{
           display: 'flex',
           alignItems: 'flex-start',
           gap: 12,
-          cursor: 'pointer',
-          color: '#fff',
+          cursor: opened ? 'pointer' : 'not-allowed',
+          color: opened ? '#fff' : 'rgba(255,255,255,0.55)',
           fontSize: 14,
           fontWeight: 700,
           lineHeight: 1.5,
@@ -55,8 +89,16 @@ export default function TermsGate({
         <input
           type="checkbox"
           checked={checked}
-          onChange={e => onCheckedChange(e.target.checked)}
-          style={{ marginTop: 3, width: 20, height: 20, accentColor: '#FFC933', flexShrink: 0, cursor: 'pointer' }}
+          disabled={!opened}
+          onChange={e => onCheckChange(e.target.checked)}
+          style={{
+            marginTop: 3,
+            width: 20,
+            height: 20,
+            accentColor: '#FFC933',
+            flexShrink: 0,
+            cursor: opened ? 'pointer' : 'not-allowed',
+          }}
         />
         <span>
           I confirm that I have read, understood and agree to the{' '}
@@ -64,7 +106,7 @@ export default function TermsGate({
             href={pdfHref}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
+            onClick={openWaiver}
             style={{ color: '#FFD94A', textDecoration: 'underline' }}
             title={label}
           >

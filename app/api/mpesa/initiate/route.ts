@@ -145,7 +145,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (bErr || !booking) {
-      return NextResponse.json({ error: bErr?.message || 'Failed to create booking' }, { status: 500 })
+      const msg = bErr?.message || 'Failed to create booking'
+      if (/adult_with_child/i.test(msg)) {
+        return NextResponse.json(
+          {
+            error:
+              'Adult + free under-95cm bookings are temporarily blocked by a database rule. Please retry in a moment, or add a paid child ticket.',
+          },
+          { status: 500 },
+        )
+      }
+      return NextResponse.json({ error: msg }, { status: 500 })
     }
 
     const stkDescription =
