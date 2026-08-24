@@ -43,7 +43,7 @@ export default function TermsGate({
           style={{ marginTop: 3, width: 20, height: 20, accentColor: '#FFC933', flexShrink: 0, cursor: 'pointer' }}
         />
         <span>
-          I agree to the{' '}
+          I confirm that I have read, understood and agree to the{' '}
           <a
             href={TERMS_PAGE}
             target="_blank"
@@ -51,10 +51,9 @@ export default function TermsGate({
             onClick={e => e.stopPropagation()}
             style={{ color: '#FFD94A', textDecoration: 'underline' }}
           >
-            Terms and Conditions
+            terms and conditions
           </a>
-          {' '}
-          (tickets are non-refundable or transferable).{' '}
+          .{' '}
           <a
             href={TERMS_PDF}
             target="_blank"

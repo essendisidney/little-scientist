@@ -25,8 +25,12 @@ export default function TermsPage() {
         </li>
       </ol>
 
-      <p className="mt-10 text-xs text-neutral-500">
-        This page is also available as a PDF at /terms.pdf. Replace both with lawyer-approved copy when ready.
+      <p className="mt-10 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-[#111]">
+        ☐ I confirm that I have read, understood and agree to the above terms and conditions
+      </p>
+
+      <p className="mt-6 text-xs text-neutral-500">
+        Full General Visit Entry Agreement &amp; Risk Release: <a className="underline" href="/terms.pdf">terms.pdf</a>
       </p>
     </main>
   )
