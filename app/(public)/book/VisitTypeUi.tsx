@@ -83,6 +83,7 @@ export function TermsBoxes({
   termsRead,
   setTermsRead,
   setTermsConsent,
+  visitType = 'general',
 }: {
   termsRead: boolean
   termsConsent?: boolean
@@ -90,9 +91,11 @@ export function TermsBoxes({
   setTermsConsent?: (v: boolean) => void
   readLabel?: string
   consentLabel?: string
+  visitType?: 'general' | 'birthday' | 'school'
 }) {
   return (
     <TermsGate
+      visitType={visitType}
       checked={termsRead}
       onCheckedChange={v => {
         setTermsRead(v)

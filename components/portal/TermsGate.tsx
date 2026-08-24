@@ -1,19 +1,35 @@
 'use client'
 
-const TERMS_PAGE = '/terms'
-const TERMS_PDF = '/terms.pdf'
+import type { VisitType } from '@/lib/visit-type'
+
+const WAIVER_PDF: Record<VisitType, string> = {
+  general: '/waivers/general-visit.pdf',
+  birthday: '/waivers/birthday-visit.pdf',
+  school: '/waivers/school-visit.pdf',
+}
+
+const WAIVER_LABEL: Record<VisitType, string> = {
+  general: 'General Visit Entry Agreement & Risk Release',
+  birthday: 'Birthday Visit Entry Agreement & Risk Release',
+  school: 'School Visit Entry Agreement & Risk Release',
+}
 
 /**
- * Simple one-tap terms acceptance.
- * Link opens the full terms; checkbox alone is enough to continue.
+ * Simple one-tap waiver acceptance.
+ * Link opens the visit-specific PDF; checkbox alone is enough to continue.
  */
 export default function TermsGate({
   checked,
   onCheckedChange,
+  visitType = 'general',
 }: {
   checked: boolean
   onCheckedChange: (v: boolean) => void
+  visitType?: VisitType
 }) {
+  const pdfHref = WAIVER_PDF[visitType]
+  const label = WAIVER_LABEL[visitType]
+
   return (
     <div
       style={{
@@ -45,24 +61,16 @@ export default function TermsGate({
         <span>
           I confirm that I have read, understood and agree to the{' '}
           <a
-            href={TERMS_PAGE}
+            href={pdfHref}
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             style={{ color: '#FFD94A', textDecoration: 'underline' }}
+            title={label}
           >
             terms and conditions
           </a>
-          .{' '}
-          <a
-            href={TERMS_PDF}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: 600 }}
-          >
-            PDF
-          </a>
+          .
         </span>
       </label>
     </div>

@@ -161,7 +161,7 @@ export default function BirthdaysPage() {
             />
 
             <DirectReachOut />
-            <TermsGate checked={termsOk} onCheckedChange={setTermsOk} />
+            <TermsGate visitType="birthday" checked={termsOk} onCheckedChange={setTermsOk} />
             {error && <p className="mb-3 text-sm font-semibold text-red-300">{error}</p>}
             <button
               type="button"

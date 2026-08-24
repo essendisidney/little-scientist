@@ -1735,6 +1735,7 @@ export default function BookPage() {
                           autoComplete="tel"
                         />
                         <TermsGate
+                          visitType={visitType}
                           checked={termsRead}
                           onCheckedChange={v => {
                             setTermsRead(v)
@@ -1922,6 +1923,7 @@ export default function BookPage() {
                 />
 
                 <TermsGate
+                  visitType={visitType}
                   checked={termsRead}
                   onCheckedChange={v => {
                     setTermsRead(v)

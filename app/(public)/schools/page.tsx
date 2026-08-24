@@ -153,7 +153,7 @@ export default function SchoolsPage() {
             />
 
             <DirectReachOut context="Need a tailored school package? Call / WhatsApp / Email us." />
-            <TermsGate checked={termsOk} onCheckedChange={setTermsOk} />
+            <TermsGate visitType="school" checked={termsOk} onCheckedChange={setTermsOk} />
             {error && <p className="mb-3 text-sm font-semibold text-red-300">{error}</p>}
             <button
               type="button"
