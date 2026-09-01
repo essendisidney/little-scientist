@@ -11,6 +11,27 @@ function guardianEmailFromNotes(notes?: string | null): string {
   return m?.[1] || '—'
 }
 
+function paymentStatusStyle(status: string): { bg: string; color: string } {
+  const s = status.toLowerCase()
+  if (s === 'paid') return { bg: 'rgba(74,222,128,0.1)', color: '#4ade80' }
+  if (s === 'pending' || s === 'processing') return { bg: 'rgba(255,217,74,0.12)', color: '#ffd700' }
+  if (s === 'expired') return { bg: 'rgba(148,163,184,0.15)', color: '#94a3b8' }
+  return { bg: 'rgba(248,113,113,0.1)', color: '#f87171' }
+}
+
+function enquiryStatusStyle(status: string): { bg: string; color: string } {
+  const s = status.toLowerCase()
+  if (s === 'confirmed') return { bg: 'rgba(74,222,128,0.12)', color: '#4ade80' }
+  if (s === 'contacted') return { bg: 'rgba(56,189,248,0.12)', color: '#38bdf8' }
+  if (s === 'declined') return { bg: 'rgba(248,113,113,0.12)', color: '#f87171' }
+  return { bg: 'rgba(255,217,74,0.12)', color: '#ffd700' }
+}
+
+function phoneTel(href: string) {
+  const digits = href.replace(/\D/g, '')
+  return digits ? `tel:+${digits.startsWith('254') ? digits : `254${digits.replace(/^0/, '')}`}` : undefined
+}
+
 type Tab = 'overview' | 'accounting' | 'visitors' | 'enquiries'
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -100,7 +121,15 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(today)
   const [kpis, setKpis] = useState({ ticketRev: 0, visitors: 0, bookings: 0 })
   const [sessions, setSessions] = useState<
-    { id?: string; time_slot: string; capacity: number; booked_count: number; held_count?: number; is_blocked?: boolean }[]
+    {
+      id?: string
+      time_slot: string
+      capacity: number
+      booked_count: number
+      held_count?: number
+      pending_count?: number
+      is_blocked?: boolean
+    }[]
   >([])
   const [slotEdits, setSlotEdits] = useState<Record<string, { capacity: string; held: string }>>({})
   const [dayBookings, setDayBookings] = useState<
@@ -160,6 +189,8 @@ export default function DashboardPage() {
     }[]
   >([])
   const [enquiriesLoading, setEnquiriesLoading] = useState(false)
+  const [enquiryFilter, setEnquiryFilter] = useState<string>('all')
+  const [pendingEnquiryCount, setPendingEnquiryCount] = useState(0)
 
   useEffect(() => {
     async function load() {
@@ -172,7 +203,7 @@ export default function DashboardPage() {
 
       const sRes = await supabase
         .from('sessions')
-        .select('id, time_slot, capacity, booked_count, held_count, is_blocked')
+        .select('id, time_slot, capacity, booked_count, held_count, pending_count, is_blocked')
         .eq('session_date', selectedDate)
         .order('time_slot')
       const sessionIds = ((sRes.data || []) as { id: string }[]).map(s => s.id)
@@ -209,38 +240,84 @@ export default function DashboardPage() {
       setDayBookings((dayRes.data || []) as typeof dayBookings)
       setRecent((rRes.data || []) as typeof recent)
       setTrialBalance((tbRes.data || []) as typeof trialBalance)
+
+      const [bPending, sPending] = await Promise.all([
+        supabase.from('birthday_enquiries').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('school_enquiries').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      ])
+      setPendingEnquiryCount((bPending.count || 0) + (sPending.count || 0))
+
       setLoading(false)
       setDateLoading(false)
     }
     load()
   }, [selectedDate])
 
+  async function loadEnquiries() {
+    setEnquiriesLoading(true)
+    const [bRes, sRes] = await Promise.all([
+      supabase
+        .from('birthday_enquiries')
+        .select('enquiry_ref, parent_name, phone, guest_count, preferred_date, status, special_requirements, created_at')
+        .order('created_at', { ascending: false })
+        .limit(40),
+      supabase
+        .from('school_enquiries')
+        .select('enquiry_ref, school_name, contact_name, contact_phone, contact_email, student_count, preferred_date, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(40),
+    ])
+    const birthdays = (bRes.data || []) as typeof birthdayEnquiries
+    const schools = (sRes.data || []) as typeof schoolEnquiries
+    setBirthdayEnquiries(birthdays)
+    setSchoolEnquiries(schools)
+    setPendingEnquiryCount(
+      birthdays.filter(e => e.status === 'pending').length + schools.filter(e => e.status === 'pending').length,
+    )
+    setEnquiriesLoading(false)
+  }
+
   useEffect(() => {
     if (tab !== 'enquiries') return
-    let alive = true
-    ;(async () => {
-      setEnquiriesLoading(true)
-      const [bRes, sRes] = await Promise.all([
-        supabase
-          .from('birthday_enquiries')
-          .select('enquiry_ref, parent_name, phone, guest_count, preferred_date, status, special_requirements, created_at')
-          .order('created_at', { ascending: false })
-          .limit(40),
-        supabase
-          .from('school_enquiries')
-          .select('enquiry_ref, school_name, contact_name, contact_phone, contact_email, student_count, preferred_date, status, created_at')
-          .order('created_at', { ascending: false })
-          .limit(40),
-      ])
-      if (!alive) return
-      setBirthdayEnquiries((bRes.data || []) as typeof birthdayEnquiries)
-      setSchoolEnquiries((sRes.data || []) as typeof schoolEnquiries)
-      setEnquiriesLoading(false)
-    })()
-    return () => {
-      alive = false
-    }
+    void loadEnquiries()
   }, [tab])
+
+  function filterByStatus<T extends { status: string }>(items: T[]) {
+    if (enquiryFilter === 'all') return items
+    return items.filter(e => e.status === enquiryFilter)
+  }
+
+  async function exportEnquiries() {
+    setExporting(true)
+    try {
+      const rows = [
+        ...birthdayEnquiries.map(e => ({
+          type: 'birthday',
+          ref: e.enquiry_ref,
+          name: e.parent_name,
+          phone: e.phone,
+          email: guardianEmailFromNotes(e.special_requirements),
+          guests: e.guest_count,
+          preferred_date: e.preferred_date,
+          status: e.status,
+        })),
+        ...schoolEnquiries.map(e => ({
+          type: 'school',
+          ref: e.enquiry_ref,
+          school: e.school_name,
+          contact: e.contact_name,
+          phone: e.contact_phone,
+          email: e.contact_email,
+          students: e.student_count,
+          preferred_date: e.preferred_date,
+          status: e.status,
+        })),
+      ]
+      downloadCsv(`enquiries-${today}.csv`, rows)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function updateEnquiryStatus(type: 'birthday' | 'school', enquiryRef: string, status: string) {
     setActionError('')
@@ -254,9 +331,23 @@ export default function DashboardPage() {
       return
     }
     if (type === 'birthday') {
-      setBirthdayEnquiries(prev => prev.map(e => (e.enquiry_ref === enquiryRef ? { ...e, status } : e)))
+      setBirthdayEnquiries(prev => {
+        const next = prev.map(e => (e.enquiry_ref === enquiryRef ? { ...e, status } : e))
+        setPendingEnquiryCount(
+          next.filter(e => e.status === 'pending').length +
+            schoolEnquiries.filter(e => e.status === 'pending').length,
+        )
+        return next
+      })
     } else {
-      setSchoolEnquiries(prev => prev.map(e => (e.enquiry_ref === enquiryRef ? { ...e, status } : e)))
+      setSchoolEnquiries(prev => {
+        const next = prev.map(e => (e.enquiry_ref === enquiryRef ? { ...e, status } : e))
+        setPendingEnquiryCount(
+          birthdayEnquiries.filter(e => e.status === 'pending').length +
+            next.filter(e => e.status === 'pending').length,
+        )
+        return next
+      })
     }
   }
 
@@ -420,7 +511,7 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: '#060d1a', color: '#e2e8f0', fontFamily: 'Nunito, sans-serif' }}>
       <div style={{ padding: 24 }}>
         {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
           {[
             { label: 'Total revenue', val: `KES ${kpis.ticketRev.toLocaleString()}`, color: '#ffd700' },
             { label: 'Total visitors', val: kpis.visitors.toString(), color: '#7fffd4' },
@@ -467,9 +558,26 @@ export default function DashboardPage() {
                 fontSize: 14,
                 fontWeight: 700,
                 fontFamily: 'Nunito, sans-serif',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
               }}
             >
               {TAB_LABELS[t]}
+              {t === 'enquiries' && pendingEnquiryCount > 0 && (
+                <span
+                  style={{
+                    background: 'rgba(255,217,74,0.2)',
+                    color: '#ffd700',
+                    fontSize: 11,
+                    fontWeight: 900,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                  }}
+                >
+                  {pendingEnquiryCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -548,8 +656,9 @@ export default function DashboardPage() {
             ) : (
               sessions.map(s => {
                 const held = s.held_count || 0
+                const pending = s.pending_count || 0
                 const open = sessionOpenSpots(s)
-                const used = Math.min(s.capacity, (s.booked_count || 0) + held)
+                const used = Math.min(s.capacity, (s.booked_count || 0) + held + pending)
                 const pct = s.capacity > 0 ? Math.round((used / s.capacity) * 100) : s.is_blocked ? 100 : 0
                 const edit = slotEdit(s)
                 const dirty =
@@ -580,7 +689,7 @@ export default function DashboardPage() {
                       <div>
                         <div style={{ fontWeight: 800 }}>{SLOT_LABELS[s.time_slot] || s.time_slot}</div>
                         <div style={{ color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
-                          Booked {s.booked_count} · Held {held} · Open {open} of {s.capacity}
+                          Booked {s.booked_count} · Pending {pending} · Held {held} · Open {open} of {s.capacity}
                           {s.is_blocked ? ' · slot closed' : ''}
                         </div>
                       </div>
@@ -719,7 +828,15 @@ export default function DashboardPage() {
                             </a>
                           </td>
                           <td style={{ padding: '10px 12px' }}>{b.booker_name || '—'}</td>
-                          <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.55)' }}>{b.booker_phone || '—'}</td>
+                          <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.55)' }}>
+                            {b.booker_phone ? (
+                              <a href={phoneTel(b.booker_phone)} style={{ color: '#7dd3fc', textDecoration: 'none' }}>
+                                {b.booker_phone}
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                           <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.7)' }}>
                             {SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '—'}
                           </td>
@@ -728,18 +845,23 @@ export default function DashboardPage() {
                           </td>
                           <td style={{ padding: '10px 12px', fontWeight: 700 }}>KES {b.total_amount_kes.toLocaleString()}</td>
                           <td style={{ padding: '10px 12px' }}>
-                            <span
-                              style={{
-                                padding: '2px 8px',
-                                borderRadius: 4,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                background: b.payment_status === 'paid' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-                                color: b.payment_status === 'paid' ? '#4ade80' : '#f87171',
-                              }}
-                            >
-                              {b.payment_status}
-                            </span>
+                            {(() => {
+                              const st = paymentStatusStyle(b.payment_status)
+                              return (
+                                <span
+                                  style={{
+                                    padding: '2px 8px',
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: st.bg,
+                                    color: st.color,
+                                  }}
+                                >
+                                  {b.payment_status}
+                                </span>
+                              )
+                            })()}
                           </td>
                         </tr>
                       ))}
@@ -927,18 +1049,23 @@ export default function DashboardPage() {
                     </td>
                     <td style={{ padding: '10px 16px', fontWeight: 700 }}>KES {b.total_amount_kes.toLocaleString()}</td>
                     <td style={{ padding: '10px 16px' }}>
-                      <span
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: b.payment_status === 'paid' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-                          color: b.payment_status === 'paid' ? '#4ade80' : '#f87171',
-                        }}
-                      >
-                        {b.payment_status}
-                      </span>
+                      {(() => {
+                        const st = paymentStatusStyle(b.payment_status)
+                        return (
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: st.bg,
+                              color: st.color,
+                            }}
+                          >
+                            {b.payment_status}
+                          </span>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -949,6 +1076,48 @@ export default function DashboardPage() {
 
         {tab === 'enquiries' && (
           <div style={{ display: 'grid', gap: 20 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '4px 0',
+              }}
+            >
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', fontWeight: 700 }}>Filter</span>
+                {(['all', ...ENQUIRY_STATUSES] as const).map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setEnquiryFilter(f)}
+                    style={{
+                      ...navBtnStyle,
+                      color: enquiryFilter === f ? '#ffd700' : 'rgba(255,255,255,0.55)',
+                      borderColor: enquiryFilter === f ? 'rgba(255,217,74,0.35)' : 'rgba(255,255,255,0.12)',
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => void loadEnquiries()} style={navBtnStyle}>
+                  ↻ Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportEnquiries()}
+                  disabled={exporting}
+                  style={{ ...navBtnStyle, color: exporting ? 'rgba(255,255,255,0.4)' : '#ffd700' }}
+                >
+                  {exporting ? 'Exporting…' : '⬇️ Export CSV'}
+                </button>
+              </div>
+            </div>
             {enquiriesLoading ? (
               <p style={{ color: 'rgba(255,255,255,0.45)', padding: 20 }}>Loading enquiries…</p>
             ) : (
@@ -962,9 +1131,9 @@ export default function DashboardPage() {
                   }}
                 >
                   <div style={{ padding: '16px 20px', fontWeight: 800, fontSize: 16 }}>
-                    Birthday enquiries ({birthdayEnquiries.length})
+                    Birthday enquiries ({filterByStatus(birthdayEnquiries).length})
                   </div>
-                  {birthdayEnquiries.length === 0 ? (
+                  {filterByStatus(birthdayEnquiries).length === 0 ? (
                     <p style={{ padding: '0 20px 16px', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>No birthday enquiries yet.</p>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
@@ -988,7 +1157,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {birthdayEnquiries.map((e, i) => (
+                        {filterByStatus(birthdayEnquiries).map((e, i) => (
                           <tr
                             key={e.enquiry_ref}
                             style={{
@@ -998,32 +1167,50 @@ export default function DashboardPage() {
                           >
                             <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#ffd700' }}>{e.enquiry_ref}</td>
                             <td style={{ padding: '10px 16px' }}>{e.parent_name}</td>
-                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.phone}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>
+                              <a href={phoneTel(e.phone)} style={{ color: '#7dd3fc', textDecoration: 'none' }}>
+                                {e.phone}
+                              </a>
+                            </td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
-                              {guardianEmailFromNotes(e.special_requirements)}
+                              {(() => {
+                                const email = guardianEmailFromNotes(e.special_requirements)
+                                return email !== '—' ? (
+                                  <a href={`mailto:${email}`} style={{ color: '#ffd700' }}>
+                                    {email}
+                                  </a>
+                                ) : (
+                                  '—'
+                                )
+                              })()}
                             </td>
                             <td style={{ padding: '10px 16px' }}>{e.guest_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
-                              <select
-                                value={e.status}
-                                onChange={ev => void updateEnquiryStatus('birthday', e.enquiry_ref, ev.target.value)}
-                                style={{
-                                  padding: '4px 8px',
-                                  borderRadius: 6,
-                                  border: '1px solid rgba(255,255,255,0.15)',
-                                  background: 'rgba(255,255,255,0.06)',
-                                  color: '#ffd700',
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {ENQUIRY_STATUSES.map(s => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </select>
+                              {(() => {
+                                const st = enquiryStatusStyle(e.status)
+                                return (
+                                  <select
+                                    value={e.status}
+                                    onChange={ev => void updateEnquiryStatus('birthday', e.enquiry_ref, ev.target.value)}
+                                    style={{
+                                      padding: '4px 8px',
+                                      borderRadius: 6,
+                                      border: `1px solid ${st.color}44`,
+                                      background: st.bg,
+                                      color: st.color,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    {ENQUIRY_STATUSES.map(s => (
+                                      <option key={s} value={s}>
+                                        {s}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )
+                              })()}
                             </td>
                           </tr>
                         ))}
@@ -1041,9 +1228,9 @@ export default function DashboardPage() {
                   }}
                 >
                   <div style={{ padding: '16px 20px', fontWeight: 800, fontSize: 16 }}>
-                    School enquiries ({schoolEnquiries.length})
+                    School enquiries ({filterByStatus(schoolEnquiries).length})
                   </div>
-                  {schoolEnquiries.length === 0 ? (
+                  {filterByStatus(schoolEnquiries).length === 0 ? (
                     <p style={{ padding: '0 20px 16px', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>No school enquiries yet.</p>
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
@@ -1067,7 +1254,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {schoolEnquiries.map((e, i) => (
+                        {filterByStatus(schoolEnquiries).map((e, i) => (
                           <tr
                             key={e.enquiry_ref}
                             style={{
@@ -1078,7 +1265,11 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#ffd700' }}>{e.enquiry_ref}</td>
                             <td style={{ padding: '10px 16px' }}>{e.school_name}</td>
                             <td style={{ padding: '10px 16px' }}>{e.contact_name}</td>
-                            <td style={{ padding: '10px 16px' }}>{e.contact_phone}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <a href={phoneTel(e.contact_phone)} style={{ color: '#7dd3fc', textDecoration: 'none' }}>
+                                {e.contact_phone}
+                              </a>
+                            </td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
                               <a href={`mailto:${e.contact_email}`} style={{ color: '#ffd700' }}>
                                 {e.contact_email}
@@ -1087,25 +1278,30 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px' }}>{e.student_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
-                              <select
-                                value={e.status}
-                                onChange={ev => void updateEnquiryStatus('school', e.enquiry_ref, ev.target.value)}
-                                style={{
-                                  padding: '4px 8px',
-                                  borderRadius: 6,
-                                  border: '1px solid rgba(255,255,255,0.15)',
-                                  background: 'rgba(255,255,255,0.06)',
-                                  color: '#ffd700',
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {ENQUIRY_STATUSES.map(s => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </select>
+                              {(() => {
+                                const st = enquiryStatusStyle(e.status)
+                                return (
+                                  <select
+                                    value={e.status}
+                                    onChange={ev => void updateEnquiryStatus('school', e.enquiry_ref, ev.target.value)}
+                                    style={{
+                                      padding: '4px 8px',
+                                      borderRadius: 6,
+                                      border: `1px solid ${st.color}44`,
+                                      background: st.bg,
+                                      color: st.color,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    {ENQUIRY_STATUSES.map(s => (
+                                      <option key={s} value={s}>
+                                        {s}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )
+                              })()}
                             </td>
                           </tr>
                         ))}

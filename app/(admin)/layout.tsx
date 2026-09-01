@@ -45,11 +45,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [checking, setChecking] = useState(true)
   const [authed, setAuthed] = useState(false)
   const [role, setRole] = useState<Role>('admin')
+  const [userEmail, setUserEmail] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
         setAuthed(true)
+        setUserEmail(data.session.user.email || '')
         const r = getRoleFromSession(data.session)
         setRole(r)
         if (pathname !== '/admin/login' && !isAllowed(r, pathname)) {
@@ -135,6 +137,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           {role}
         </div>
+        {userEmail && (
+          <div
+            style={{
+              color: 'rgba(255,255,255,0.35)',
+              fontSize: 12,
+              fontWeight: 600,
+              marginRight: 12,
+              whiteSpace: 'nowrap' as const,
+              flexShrink: 0,
+              maxWidth: 180,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={userEmail}
+          >
+            {userEmail}
+          </div>
+        )}
         {visibleNav.map(n => (
           <a
             key={n.href}
