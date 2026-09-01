@@ -17,7 +17,8 @@ OAuth is **not** defined as a path in the MpesaExpress Swagger. Security schemes
 | Item | Value |
 |------|--------|
 | Sandbox token URL (Getting Started) | `https://uat.buni.kcbgroup.com/token?grant_type=client_credentials` |
-| Portal OAuth2 token URL (some apps) | `https://accounts.buni.kcbgroup.com/oauth2/token` |
+| Production token URL (go-live) | `https://api.buni.kcbgroup.com/token?grant_type=client_credentials` |
+| Portal OAuth2 token URL (legacy) | `https://accounts.buni.kcbgroup.com/oauth2/token` |
 | Method | `POST` |
 | Auth header | `Authorization: Basic {Base64(clientId:clientSecret)}` |
 | Success | `{ "access_token": "...", "token_type": "Bearer", "expires_in": 3599 }` |
@@ -33,7 +34,7 @@ OAuth is **not** defined as a path in the MpesaExpress Swagger. Security schemes
 | Server (Swagger) | `https://uat.buni.kcbgroup.com/mm/api/request/1.0.0` |
 | Path | `POST /stkpush` |
 | Full sandbox URL | `https://uat.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush` |
-| Production URL (same path pattern) | `https://buni.kcbgroup.com/mm/api/request/1.0.0/stkpush` |
+| Production URL (go-live) | `https://api.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush` |
 | Auth | Bearer token (+ optional basic / apikey per portal) |
 | `x-auth-type` | Application & Application User |
 

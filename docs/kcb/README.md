@@ -31,7 +31,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 Merchant card details: [MERCHANT.md](./MERCHANT.md).
 
-If your portal keys only work with `https://accounts.buni.kcbgroup.com/oauth2/token`, set `KCB_TOKEN_URL` to that URL.
+**Production go-live:** Portal [developer.buni.kcbgroup.com](https://developer.buni.kcbgroup.com/devportal/apis) (login `little_scientist`). Token + STK base: `https://api.buni.kcbgroup.com`. See [NEXT.md](./NEXT.md).
 
 **Never** use `NEXT_PUBLIC_` for KCB secrets. **Never** paste secrets into chat or commit them.
 

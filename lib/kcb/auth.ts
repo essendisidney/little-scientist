@@ -59,7 +59,7 @@ export async function getKcbAccessToken(opts?: { forceRefresh?: boolean }): Prom
   } catch {
     const hint =
       res.status === 404
-        ? ' — check KCB_TOKEN_URL (use https://accounts.buni.kcbgroup.com/oauth2/token)'
+        ? ' — check KCB_TOKEN_URL (production: https://api.buni.kcbgroup.com/token?grant_type=client_credentials)'
         : res.status >= 500
           ? ' — KCB auth gateway error'
           : ''

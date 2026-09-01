@@ -8,19 +8,31 @@ There is **no** `card-ipg.swagger.json` in this folder yet.
 
 Until then, checkout remains **M-Pesa only**.
 
-## Production M-Pesa
+## Production M-Pesa (go-live)
+
+**Portal:** [developer.buni.kcbgroup.com/devportal/apis](https://developer.buni.kcbgroup.com/devportal/apis)  
+**Login:** `little_scientist` (reset password in portal if needed)
+
+**Token:** `https://api.buni.kcbgroup.com/token?grant_type=client_credentials`
+
+**STK:** `https://api.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush`
 
 **Client id casing:** Production Consumer Key is `…NAsh…` (lowercase `h`). Using `…NAsH…` causes `invalid_client`.
 
-**Token:** `https://accounts.buni.kcbgroup.com/oauth2/token` + `grant_type=client_credentials` works with the Production keys.
+**invoiceNumber:** `{account}-{reference}` e.g. `8068418-LSTEST001`
 
-**STK host:** As of last probe, `https://buni.kcbgroup.com/mm/api/request/1.0.0/stkpush` returns **404**. Production app tokens are accepted by the **UAT** STK path:
+**Vercel (Production):**
 
-`https://uat.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush`
+```env
+KCB_ENVIRONMENT=production
+KCB_TOKEN_URL=https://api.buni.kcbgroup.com/token?grant_type=client_credentials
+KCB_MPESA_EXPRESS_URL=https://api.buni.kcbgroup.com/mm/api/request/1.0.0/stkpush
+PAYMENT_PROVIDER=kcb
+```
 
-Portal “CURL TO GENERATE ACCESS TOKEN” may show `grant_type=password` placeholders — the server should still use **client_credentials**.
+Remove old overrides pointing at `accounts.buni…` or `uat.buni…` unless KCB support says otherwise.
 
-**Paybill 522533:** Own shortcode still returns “Merchant does not exist” until BUNI go-live provisions it. Shared shortcode + empty `orgShortCode` is the working STK shape.
+**Legacy hosts (pre go-live):** `accounts.buni.kcbgroup.com/oauth2/token` and UAT STK were workarounds; prefer `api.buni.kcbgroup.com` now.
 
 ## SMS tickets
 
