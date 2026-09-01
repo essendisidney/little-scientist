@@ -1,17 +1,21 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 60
 import { getKcbAccessToken, clearKcbTokenCache } from '@/lib/kcb/auth'
 import { isKcbConfigured, getKcbConfig } from '@/lib/kcb/config'
 import { toPublicError } from '@/lib/kcb/errors'
 import { logKcbApiCall } from '@/lib/kcb/persistence'
+import { requireStaff } from '@/lib/admin-auth'
 
 /**
  * POST /api/kcb/auth
  * Server-side OAuth health check. Never returns the access token or client secret.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
+    const auth = await requireStaff(req, ['admin'])
+    if ('error' in auth) return auth.error
+
     if (!isKcbConfigured()) {
       return NextResponse.json({ ok: false, error: 'KCB credentials are not configured' }, { status: 503 })
     }

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { staffFetch } from '@/lib/staff-fetch'
 
 type Result = {
   valid: boolean
@@ -110,7 +111,7 @@ export default function VerifyPage() {
 
   async function refreshOfflineCache() {
     const day = todayStr()
-    const res = await fetch('/api/verify/today')
+    const res = await staffFetch('/api/verify/today')
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to refresh cache')
     const ticketsArr: OfflineTicket[] = data.tickets || []
@@ -163,10 +164,8 @@ export default function VerifyPage() {
     const remaining: typeof q = []
     for (const item of q) {
       try {
-        const res = await fetch(`/api/verify/${encodeURIComponent(item.qr)}`, {
+        const res = await staffFetch(`/api/verify/${encodeURIComponent(item.qr)}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ staffId: 'gate-staff' }),
         })
         if (!res.ok && res.status !== 409) {
           remaining.push(item)
@@ -238,10 +237,8 @@ export default function VerifyPage() {
           })
         }
       } else {
-        const res = await fetch(`/api/verify/${encodeURIComponent(qrValue)}`, {
+        const res = await staffFetch(`/api/verify/${encodeURIComponent(qrValue)}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ staffId: 'gate-staff' }),
         })
         const data = await res.json()
         setResult(data)

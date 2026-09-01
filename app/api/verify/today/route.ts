@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { requireStaff } from '@/lib/admin-auth'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await requireStaff(req, ['admin', 'gate'])
+  if ('error' in auth) return auth.error
+
   const today = new Date().toISOString().split('T')[0]
 
   const { data, error } = await supabaseAdmin

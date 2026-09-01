@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { requireStaff } from '@/lib/admin-auth'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ qr: string }> }) {
-  let staffId = 'gate'
+  const auth = await requireStaff(req, ['admin', 'gate'])
+  if ('error' in auth) return auth.error
+
+  const staffId = auth.staffId
   try {
-    staffId = (await req.json().catch(() => ({ staffId: 'gate' }))).staffId || 'gate'
     const { qr: rawQr } = await params
     const qr = decodeURIComponent(rawQr)
 

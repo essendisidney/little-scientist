@@ -550,6 +550,14 @@ export default function BookPage() {
         }
       }
 
+      if (visitType === 'general') {
+        if (!bookerEmail.trim() || !bookerEmail.includes('@')) {
+          setError('Enter a valid email — we send your ticket link there.')
+          setLoading(false)
+          return
+        }
+      }
+
       const bookerName =
         visitType === 'school' ? name || schoolName : visitType === 'birthday' ? name : name
 
@@ -571,9 +579,7 @@ export default function BookPage() {
                 notes: partyNotes || null,
                 sessionMode: 'shared',
               }
-            : bookerEmail.trim().includes('@')
-              ? { email: bookerEmail.trim() }
-              : null
+            : { email: bookerEmail.trim() }
 
       const res = await fetch('/api/mpesa/initiate', {
         method: 'POST',
@@ -1721,7 +1727,7 @@ export default function BookPage() {
                         />
                         <input
                           className="inp"
-                          placeholder="Email for tickets (optional)"
+                          placeholder="Email for tickets *"
                           value={bookerEmail}
                           onChange={e => setBookerEmail(e.target.value)}
                           type="email"

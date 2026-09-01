@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useState, type ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
 import QRCode from 'react-qr-code'
 import { computeBasket, DEFAULT_TIERS, BIRTHDAY_PRICING } from '@/lib/pricing'
 
@@ -130,57 +129,40 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
     let alive = true
     let pollIv: ReturnType<typeof setInterval> | undefined
 
-    async function loadTickets(bookingId: string) {
-      const { data: t } = await supabase.from('tickets').select('*').eq('booking_id', bookingId).order('ticket_type')
-      if (!alive) return
-      setTickets((t || []) as Ticket[])
-      setLoading(false)
-    }
-
-    async function checkStatus() {
-      const res = await fetch(`/api/bookings/status?ref=${encodeURIComponent(params.ref.toUpperCase())}`)
-      const data = (await res.json().catch(() => null)) as { paymentStatus?: string } | null
-      return String(data?.paymentStatus || '').toLowerCase()
-    }
-
-    async function load() {
-      setLoading(true)
-      setError('')
-      setPendingPayment(false)
-
-      const { data: b } = await supabase
-        .from('bookings')
-        .select('*, sessions(session_date, time_slot)')
-        .eq('booking_ref', params.ref.toUpperCase())
-        .single()
+    async function loadFromApi() {
+      const res = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(params.ref.toUpperCase())}`)
+      const data = (await res.json().catch(() => null)) as {
+        booking?: Booking
+        tickets?: Ticket[]
+        error?: string
+      } | null
 
       if (!alive) return
 
-      if (!b) {
-        setError('Booking not found.')
+      if (!res.ok || !data?.booking) {
+        setError(data?.error || 'Booking not found.')
         setLoading(false)
         return
       }
 
+      const b = data.booking
       if (b.payment_status !== 'paid') {
         setPendingPayment(true)
-        setBooking(b as Booking)
+        setBooking(b)
+        setTickets([])
         setLoading(false)
 
         pollIv = setInterval(async () => {
           try {
-            const status = await checkStatus()
-            if (status === 'paid') {
+            const r = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(params.ref.toUpperCase())}`)
+            const d = (await r.json().catch(() => null)) as { booking?: Booking; tickets?: Ticket[] } | null
+            if (!alive || !d?.booking) return
+            if (d.booking.payment_status === 'paid') {
               if (pollIv) clearInterval(pollIv)
-              const { data: fresh } = await supabase
-                .from('bookings')
-                .select('*, sessions(session_date, time_slot)')
-                .eq('booking_ref', params.ref.toUpperCase())
-                .single()
-              if (!alive || !fresh) return
               setPendingPayment(false)
-              setBooking(fresh as Booking)
-              await loadTickets(fresh.id)
+              setBooking(d.booking)
+              setTickets((d.tickets || []) as Ticket[])
+              setLoading(false)
             }
           } catch {
             /* keep polling */
@@ -189,11 +171,12 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
         return
       }
 
-      setBooking(b as Booking)
-      await loadTickets(b.id)
+      setBooking(b)
+      setTickets((data.tickets || []) as Ticket[])
+      setLoading(false)
     }
 
-    load()
+    loadFromApi()
     return () => {
       alive = false
       if (pollIv) clearInterval(pollIv)

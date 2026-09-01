@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { initiateSTKPush } from '@/lib/mpesa'
+import { requireStaff } from '@/lib/admin-auth'
 
 export async function GET(req: NextRequest) {
+  const auth = await requireStaff(req, ['admin', 'counter'])
+  if ('error' in auth) return auth.error
+
   const ref = req.nextUrl.searchParams.get('ref')
   if (!ref) return NextResponse.json({ error: 'ref required' }, { status: 400 })
 
@@ -38,8 +42,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireStaff(req, ['admin', 'counter'])
+  if ('error' in auth) return auth.error
+
   try {
-    const { bookingRef, category, description, quantity, unitPriceKes, staffId } = await req.json()
+    const { bookingRef, category, description, quantity, unitPriceKes } = await req.json()
+    const staffId = auth.staffId
 
     const { data: booking } = await supabaseAdmin
       .from('bookings')

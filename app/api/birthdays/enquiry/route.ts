@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { sendInfoEmail, sendGuestEmail } from '@/lib/email'
 import { BIRTHDAY_FOOD_NOTICE } from '@/lib/pricing'
 import { sanitizeGuestError } from '@/lib/guest-errors'
+import { isValidKenyaPhone } from '@/lib/phone'
+import { rateLimit } from '@/lib/rate-limit'
 
 function makeRef() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -13,6 +15,9 @@ function makeRef() {
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = rateLimit(req, 'birthdays-enquiry', { limit: 8, windowMs: 60_000 })
+    if (limited) return limited
+
     const body = await req.json()
     const {
       parentName,
@@ -31,6 +36,10 @@ export async function POST(req: NextRequest) {
     const emailStr = String(email).trim()
     if (!emailStr.includes('@')) {
       return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
+    }
+
+    if (!isValidKenyaPhone(String(phone))) {
+      return NextResponse.json({ error: 'Enter a valid Kenyan mobile number.' }, { status: 400 })
     }
 
     const enquiryRef = makeRef()

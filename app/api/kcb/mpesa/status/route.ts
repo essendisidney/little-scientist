@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getKcbPaymentStatus, markProcessingTimeouts } from '@/lib/kcb/service'
 import { toPublicError } from '@/lib/kcb/errors'
+import { requireStaffOrCron } from '@/lib/admin-auth'
 
 /**
  * GET /api/kcb/mpesa/status?internalReference=...|&kcbReference=...
@@ -11,6 +12,9 @@ import { toPublicError } from '@/lib/kcb/errors'
  */
 export async function GET(req: NextRequest) {
   try {
+    const auth = await requireStaffOrCron(req, ['admin', 'accounting'])
+    if ('error' in auth) return auth.error
+
     const sp = req.nextUrl.searchParams
     const payment = await getKcbPaymentStatus({
       internalReference: sp.get('internalReference') || undefined,
@@ -39,6 +43,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireStaffOrCron(req, ['admin', 'accounting'])
+    if ('error' in auth) return auth.error
+
     const body = (await req.json().catch(() => ({}))) as {
       internalReference?: string
       kcbReference?: string

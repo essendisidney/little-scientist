@@ -2,6 +2,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 import { sessionOpenSpots } from '@/lib/session-capacity'
+import { staffFetch } from '@/lib/staff-fetch'
+
+const ENQUIRY_STATUSES = ['pending', 'contacted', 'confirmed', 'declined'] as const
 
 type Tab = 'overview' | 'accounting' | 'visitors' | 'enquiries'
 
@@ -231,6 +234,24 @@ export default function DashboardPage() {
       alive = false
     }
   }, [tab])
+
+  async function updateEnquiryStatus(type: 'birthday' | 'school', enquiryRef: string, status: string) {
+    setActionError('')
+    const res = await staffFetch('/api/admin/enquiries', {
+      method: 'PATCH',
+      body: JSON.stringify({ type, enquiryRef, status }),
+    })
+    const data = (await res.json().catch(() => null)) as { error?: string } | null
+    if (!res.ok) {
+      setActionError(data?.error || 'Could not update enquiry status.')
+      return
+    }
+    if (type === 'birthday') {
+      setBirthdayEnquiries(prev => prev.map(e => (e.enquiry_ref === enquiryRef ? { ...e, status } : e)))
+    } else {
+      setSchoolEnquiries(prev => prev.map(e => (e.enquiry_ref === enquiryRef ? { ...e, status } : e)))
+    }
+  }
 
   function slotEdit(s: { id?: string; time_slot: string; capacity: number; held_count?: number }) {
     const key = s.id || s.time_slot
@@ -974,18 +995,25 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px' }}>{e.guest_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
-                              <span
+                              <select
+                                value={e.status}
+                                onChange={ev => void updateEnquiryStatus('birthday', e.enquiry_ref, ev.target.value)}
                                 style={{
-                                  padding: '2px 8px',
-                                  borderRadius: 4,
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  background: 'rgba(255,217,74,0.1)',
+                                  padding: '4px 8px',
+                                  borderRadius: 6,
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  background: 'rgba(255,255,255,0.06)',
                                   color: '#ffd700',
+                                  fontSize: 12,
+                                  fontWeight: 700,
                                 }}
                               >
-                                {e.status}
-                              </span>
+                                {ENQUIRY_STATUSES.map(s => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
                           </tr>
                         ))}
@@ -1040,22 +1068,29 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#ffd700' }}>{e.enquiry_ref}</td>
                             <td style={{ padding: '10px 16px' }}>{e.school_name}</td>
                             <td style={{ padding: '10px 16px' }}>{e.contact_name}</td>
-                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.contact_phone}</td>
+                            <td style={{ padding: '10px 16px' }}>{e.contact_phone}</td>
                             <td style={{ padding: '10px 16px' }}>{e.student_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
-                              <span
+                              <select
+                                value={e.status}
+                                onChange={ev => void updateEnquiryStatus('school', e.enquiry_ref, ev.target.value)}
                                 style={{
-                                  padding: '2px 8px',
-                                  borderRadius: 4,
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  background: 'rgba(255,217,74,0.1)',
+                                  padding: '4px 8px',
+                                  borderRadius: 6,
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  background: 'rgba(255,255,255,0.06)',
                                   color: '#ffd700',
+                                  fontSize: 12,
+                                  fontWeight: 700,
                                 }}
                               >
-                                {e.status}
-                              </span>
+                                {ENQUIRY_STATUSES.map(s => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
                           </tr>
                         ))}

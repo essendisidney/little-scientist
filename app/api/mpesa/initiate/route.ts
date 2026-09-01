@@ -9,6 +9,7 @@ import { createAndSendKcbPayment } from '@/lib/kcb/service'
 import { isKcbConfigured } from '@/lib/kcb/config'
 import { normalizeKenyaPhone } from '@/lib/phone'
 import { sanitizeGuestError } from '@/lib/guest-errors'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const maxDuration = 60
 
@@ -20,6 +21,9 @@ const MAX_DAYS = 12
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = rateLimit(req, 'mpesa-initiate', { limit: 12, windowMs: 60_000 })
+    if (limited) return limited
+
     const body = await req.json()
     const sessionId = body?.sessionId
     const phone = body?.phone
@@ -71,6 +75,13 @@ export async function POST(req: NextRequest) {
       }
       if (!email || !email.includes('@')) {
         return NextResponse.json({ error: 'Enter a valid parent / guardian email.' }, { status: 400 })
+      }
+    }
+
+    if (bookingKind === 'general') {
+      const email = String((partyMeta as { email?: string } | null)?.email || body?.email || '').trim()
+      if (!email || !email.includes('@')) {
+        return NextResponse.json({ error: 'Enter a valid email — we send your ticket link there.' }, { status: 400 })
       }
     }
 

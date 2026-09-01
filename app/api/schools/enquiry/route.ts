@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendInfoEmail, sendGuestEmail } from '@/lib/email'
 import { sanitizeGuestError } from '@/lib/guest-errors'
+import { isValidKenyaPhone } from '@/lib/phone'
+import { rateLimit } from '@/lib/rate-limit'
 
 function makeRef() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -12,6 +14,9 @@ function makeRef() {
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = rateLimit(req, 'schools-enquiry', { limit: 8, windowMs: 60_000 })
+    if (limited) return limited
+
     const body = await req.json()
     const {
       schoolName,
@@ -34,6 +39,10 @@ export async function POST(req: NextRequest) {
       !sessionType
     ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    if (!isValidKenyaPhone(String(contactPhone))) {
+      return NextResponse.json({ error: 'Enter a valid Kenyan mobile number.' }, { status: 400 })
     }
 
     const enquiryRef = makeRef()

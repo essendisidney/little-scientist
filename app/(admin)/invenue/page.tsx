@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, type CSSProperties } from 'react'
+import { staffFetch } from '@/lib/staff-fetch'
 
 type Purchase = {
   purchase_ref: string
@@ -114,7 +115,7 @@ export default function InVenuePage() {
   async function lookupBooking(qrOrRef: string) {
     setError('')
     setLoading(true)
-    const res = await fetch(`/api/invenue/initiate?ref=${encodeURIComponent(qrOrRef.toUpperCase())}`)
+    const res = await staffFetch(`/api/invenue/initiate?ref=${encodeURIComponent(qrOrRef.toUpperCase())}`)
     const data = await res.json()
     setLoading(false)
     if (!res.ok) {
@@ -133,7 +134,7 @@ export default function InVenuePage() {
       return
     }
     setLoading(true)
-    const res = await fetch('/api/invenue/initiate', {
+    const res = await staffFetch('/api/invenue/initiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -156,7 +157,7 @@ export default function InVenuePage() {
     setStep('pending')
 
     const poll = setInterval(async () => {
-      const r = await fetch(`/api/invenue/initiate?ref=${booking?.booking_ref}`)
+      const r = await staffFetch(`/api/invenue/initiate?ref=${booking?.booking_ref}`)
       const d = await r.json()
       const p = d.booking?.in_venue_purchases?.find((x: Purchase) => x.purchase_ref === data.purchaseRef)
       if (p?.payment_status === 'paid') {
