@@ -23,34 +23,51 @@ export async function getKcbAccessToken(opts?: { forceRefresh?: boolean }): Prom
 
   const config = getKcbConfig()
   const basic = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')
+  const tokenBase = config.tokenUrl.replace(/\?.*$/, '')
+  const isAccountsOauth = /accounts\.buni\.kcbgroup\.com/i.test(config.tokenUrl)
+  const isApiBuni = /api\.buni\.kcbgroup\.com/i.test(config.tokenUrl)
 
-  // Production go-live (api.buni) and accounts.buni oauth2: grant_type in body.
-  // Gateway-style UAT uses …/token?grant_type=client_credentials (often empty body).
-  const isBodyGrant =
-    /accounts\.buni\.kcbgroup\.com/i.test(config.tokenUrl) ||
-    /api\.buni\.kcbgroup\.com/i.test(config.tokenUrl)
-  const url = isBodyGrant
-    ? config.tokenUrl.replace(/\?.*$/, '')
-    : config.tokenUrl.includes('grant_type=')
-      ? config.tokenUrl
-      : `${config.tokenUrl}${config.tokenUrl.includes('?') ? '&' : '?'}grant_type=client_credentials`
+  // api.buni (go-live email): POST …/token?grant_type=client_credentials, empty body.
+  // accounts.buni: grant_type in body. UAT gateway: query string, empty body.
+  const attempts: { url: string; body: string }[] = isApiBuni
+    ? [
+        { url: `${tokenBase}?grant_type=client_credentials`, body: '' },
+        { url: tokenBase, body: 'grant_type=client_credentials' },
+      ]
+    : isAccountsOauth
+      ? [{ url: tokenBase, body: 'grant_type=client_credentials' }]
+      : [
+          {
+            url: config.tokenUrl.includes('grant_type=')
+              ? config.tokenUrl
+              : `${tokenBase}${tokenBase.includes('?') ? '&' : '?'}grant_type=client_credentials`,
+            body: '',
+          },
+        ]
 
   const started = Date.now()
-  let res: Response
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: isBodyGrant ? 'grant_type=client_credentials' : '',
-      signal: AbortSignal.timeout(25_000),
-    })
-  } catch (err) {
+  let res: Response | undefined
+  let lastErr: unknown
+  for (const attempt of attempts) {
+    try {
+      res = await fetch(attempt.url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: attempt.body,
+        signal: AbortSignal.timeout(10_000),
+      })
+      break
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  if (!res) {
     throw new KcbAuthError('KCB token request timed out or failed to connect', {
       durationMs: Date.now() - started,
-      reason: err instanceof Error ? err.message : 'network',
+      reason: lastErr instanceof Error ? lastErr.message : 'network',
     })
   }
 

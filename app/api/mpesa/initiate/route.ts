@@ -8,6 +8,8 @@ import { sessionOpenSpots } from '@/lib/session-capacity'
 import { createAndSendKcbPayment } from '@/lib/kcb/service'
 import { isKcbConfigured } from '@/lib/kcb/config'
 
+export const maxDuration = 60
+
 const DEFAULT_ADULT_PRICE = 1000
 const DEFAULT_CHILD_PRICE = 800
 const DEFAULT_INFANT_PRICE = 0

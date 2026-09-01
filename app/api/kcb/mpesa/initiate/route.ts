@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const maxDuration = 60
 import { createAndSendKcbPayment } from '@/lib/kcb/service'
 import { toPublicError } from '@/lib/kcb/errors'
 import { isKcbConfigured } from '@/lib/kcb/config'

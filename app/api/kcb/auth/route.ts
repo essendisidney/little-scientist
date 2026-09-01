@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+
+export const maxDuration = 60
 import { getKcbAccessToken, clearKcbTokenCache } from '@/lib/kcb/auth'
 import { isKcbConfigured, getKcbConfig } from '@/lib/kcb/config'
 import { toPublicError } from '@/lib/kcb/errors'
