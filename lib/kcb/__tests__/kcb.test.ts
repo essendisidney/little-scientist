@@ -104,7 +104,7 @@ describe('mapToKcbStkRequest', () => {
     expect(body.sharedShortCode).toBe(true)
     expect(body.orgShortCode).toBe('')
     expect(body.orgPassKey).toBe('')
-    expect(body.invoiceNumber).toBe('8068418-LSTEST001')
+    expect(body.invoiceNumber).toBe('8068418-LITTLESCIENTIST')
     expect(body.invoiceNumber.length).toBeLessThanOrEqual(24)
     expect(body.transactionDescription.length).toBeLessThanOrEqual(13)
   })
@@ -121,7 +121,7 @@ describe('mapToKcbStkRequest', () => {
     expect(body).toMatchObject({
       sharedShortCode: false,
       orgShortCode: '522533',
-      invoiceNumber: '8068418-ORDER-123',
+      invoiceNumber: '8068418-LITTLESCIENTIST',
     })
   })
 

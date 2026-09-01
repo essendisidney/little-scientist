@@ -56,7 +56,7 @@ OAuth is **not** defined as a path in the MpesaExpress Swagger. Security schemes
 |-------|------|-----|-------|
 | `phoneNumber` | string | 12 | `2547XXXXXXXX` |
 | `amount` | string | 18 | No decimals |
-| `invoiceNumber` | string | 24 | **KCB guidance:** `{till/account}-{reference}` or `{till/account}#{reference}` (e.g. `8068418-LSTEST001`) |
+| `invoiceNumber` | string | 24 | **KCB guidance (bank paybill):** `{account}-{merchantBrand}` e.g. `8068418-LITTLESCIENTIST` — this is what guests see on the STK prompt. Paybill 522533 always shows “KCB Bank”; own OrgPassKey does not change that. Track bookings via `CheckoutRequestID`, not invoice. |
 | `sharedShortCode` | boolean | — | `true` → OrgShortCode/OrgPassKey replaced with internal values |
 | `orgShortCode` | string | 12 | 5–6 digit org receiving funds |
 | `orgPassKey` | string | — | Password for encrypting request; may be `""` |

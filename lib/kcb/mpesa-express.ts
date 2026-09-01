@@ -78,12 +78,11 @@ export function mapToKcbStkRequest(validated: {
   description: string
 }): KcbStkPushRequest {
   const config = getKcbConfig()
-  // KCB: invoiceNumber = till/account + "-" or "#" + your reference (e.g. 8068418-LSTEST001).
+  // KCB: bank paybill 522533 shows "KCB Bank" on STK; put merchant name in invoiceNumber
+  // (e.g. 8068418-LITTLESCIENTIST). Booking ref is tracked via CheckoutRequestID / kcb_payment_requests.
   const account = config.accountNumber.replace(/[^A-Za-z0-9]/g, '').slice(0, 12) || '8068418'
-  const refBudget = Math.max(0, INVOICE_MAX - account.length - 1)
-  const ref =
-    validated.reference.replace(/[^A-Za-z0-9-]/g, '').slice(0, refBudget) || 'LS'
-  const invoiceNumber = `${account}-${ref}`.slice(0, INVOICE_MAX)
+  const brand = config.invoiceBrand.replace(/[^A-Za-z0-9]/g, '').slice(0, Math.max(1, INVOICE_MAX - account.length - 1))
+  const invoiceNumber = `${account}-${brand}`.slice(0, INVOICE_MAX)
 
   return {
     phoneNumber: validated.phoneNumber,

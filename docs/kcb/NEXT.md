@@ -19,7 +19,14 @@ Until then, checkout remains **M-Pesa only**.
 
 **Client id casing:** Production Consumer Key is `…NAsh…` (lowercase `h`). Using `…NAsH…` causes `invalid_client`.
 
-**invoiceNumber:** `{account}-{reference}` e.g. `8068418-LSTEST001`
+**invoiceNumber:** `{account}-{merchantBrand}` e.g. `8068418-LITTLESCIENTIST` (shown on STK prompt; bank paybill 522533 always displays “KCB Bank”)
+
+**STK branding:** Use `sharedShortCode: true` with branded `invoiceNumber`. Own paybill OrgPassKey does not replace “KCB Bank” on 522533.
+
+```env
+KCB_SHARED_SHORT_CODE=true
+KCB_INVOICE_BRAND=LITTLESCIENTIST
+```
 
 **Vercel (Production):**
 

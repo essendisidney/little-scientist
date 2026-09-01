@@ -23,6 +23,8 @@ export type KcbConfig = {
   businessName: string
   orgPassKey: string
   callbackUrl: string
+  /** Shown on STK prompt via invoiceNumber (max 24 incl. account prefix). */
+  invoiceBrand: string
 }
 
 /** Merchant details from KCB “PAY WITH” card for Little Scientist Limited. */
@@ -56,11 +58,11 @@ export function getKcbConfig(): KcbConfig {
     process.env.KCB_CALLBACK_URL?.trim() ||
     (appUrl ? `${appUrl}/api/kcb/mpesa/callback` : '')
 
-  // Own Paybill 522533 → sharedShortCode false unless explicitly overridden.
+  // Bank paybill 522533: keep sharedShortCode true; merchant name goes in invoiceNumber (KCB guidance).
   const sharedRaw = process.env.KCB_SHARED_SHORT_CODE
   const sharedShortCode =
     sharedRaw == null || sharedRaw === ''
-      ? false
+      ? true
       : sharedRaw.toLowerCase() !== 'false'
 
   return {
@@ -77,6 +79,7 @@ export function getKcbConfig(): KcbConfig {
     businessName: process.env.KCB_BUSINESS_NAME?.trim() || LS_KCB_MERCHANT.businessName,
     orgPassKey: process.env.KCB_ORG_PASS_KEY ?? '',
     callbackUrl: required('KCB_CALLBACK_URL or NEXT_PUBLIC_APP_URL', callbackUrl || undefined),
+    invoiceBrand: process.env.KCB_INVOICE_BRAND?.trim() || 'LITTLESCIENTIST',
   }
 }
 
