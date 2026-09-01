@@ -9,7 +9,7 @@ import { getKcbConfig } from '@/lib/kcb/config'
 import { KcbApiError, KcbValidationError } from '@/lib/kcb/errors'
 import { logKcbApiCall, newInternalReference, sanitizePayload } from '@/lib/kcb/persistence'
 import type { AppMpesaInitiateInput, KcbPaymentStatus, ParsedKcbCallback } from '@/lib/kcb/types'
-import { postTicketPayment } from '@/lib/accounting'
+import { postTicketPayment, postInVenuePurchase, postMerchPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
 import { confirmSessionBooking, bookingHeadcount } from '@/lib/session-pending'
 
@@ -236,6 +236,22 @@ export async function processKcbCallback(rawBody: unknown) {
       checkoutRequestId: parsed.checkoutRequestId,
       rawBody,
     })
+  } else if (parsed.success && payment.source_type === 'in_venue_purchase' && payment.source_id && parsed.mpesaReceiptNumber) {
+    await settleInVenueFromKcb({
+      purchaseId: payment.source_id,
+      amount: Number(payment.amount),
+      mpesaReceipt: parsed.mpesaReceiptNumber,
+      checkoutRequestId: parsed.checkoutRequestId,
+      rawBody,
+    })
+  } else if (parsed.success && payment.source_type === 'merch_order' && payment.source_id && parsed.mpesaReceiptNumber) {
+    await settleMerchFromKcb({
+      orderId: payment.source_id,
+      amount: Number(payment.amount),
+      mpesaReceipt: parsed.mpesaReceiptNumber,
+      checkoutRequestId: parsed.checkoutRequestId,
+      rawBody,
+    })
   } else if (!parsed.success && payment.source_type === 'booking' && payment.source_id) {
     const bookingStatus = parsed.cancelled ? 'cancelled' : parsed.timedOut ? 'timeout' : 'failed'
     await supabaseAdmin
@@ -252,9 +268,98 @@ export async function processKcbCallback(rawBody: unknown) {
         raw_callback: sanitizePayload(rawBody),
       })
       .eq('mpesa_checkout_request_id', parsed.checkoutRequestId)
+  } else if (!parsed.success && payment.source_type === 'in_venue_purchase' && payment.source_id) {
+    await supabaseAdmin
+      .from('in_venue_purchases')
+      .update({ payment_status: 'failed', updated_at: now })
+      .eq('id', payment.source_id)
+      .eq('payment_status', 'pending')
+  } else if (!parsed.success && payment.source_type === 'merch_order' && payment.source_id) {
+    await supabaseAdmin
+      .from('merch_orders')
+      .update({
+        status: 'failed',
+        failure_reason: parsed.resultDesc || 'failed',
+        updated_at: now,
+      })
+      .eq('id', payment.source_id)
+      .in('status', ['pending', 'processing'])
   }
 
   return { ok: true as const, duplicate: false as const, paymentId: payment.id, status: nextStatus }
+}
+
+async function settleInVenueFromKcb(p: {
+  purchaseId: string
+  amount: number
+  mpesaReceipt: string
+  checkoutRequestId: string
+  rawBody: unknown
+}) {
+  const { data: purchase } = await supabaseAdmin
+    .from('in_venue_purchases')
+    .select('*')
+    .eq('id', p.purchaseId)
+    .maybeSingle()
+
+  if (!purchase || purchase.payment_status === 'paid') return
+
+  await supabaseAdmin
+    .from('in_venue_purchases')
+    .update({
+      payment_status: 'paid',
+      mpesa_receipt_number: p.mpesaReceipt,
+      mpesa_checkout_request_id: p.checkoutRequestId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', purchase.id)
+
+  await postInVenuePurchase({
+    purchaseId: purchase.id as string,
+    amountKes: Number(purchase.total_kes ?? p.amount),
+    mpesaReceipt: p.mpesaReceipt,
+  })
+
+  await supabaseAdmin.from('audit_log').insert({
+    action: 'INVENUE_CONFIRMED',
+    entity: 'in_venue_purchases',
+    entity_id: purchase.id,
+    performed_by: purchase.served_by || 'system',
+    metadata: {
+      amount: purchase.total_kes,
+      mpesa_receipt: p.mpesaReceipt,
+      provider: 'kcb_buni',
+    },
+  })
+}
+
+async function settleMerchFromKcb(p: {
+  orderId: string
+  amount: number
+  mpesaReceipt: string
+  checkoutRequestId: string
+  rawBody: unknown
+}) {
+  const { data: order } = await supabaseAdmin.from('merch_orders').select('*').eq('id', p.orderId).maybeSingle()
+
+  if (!order || order.status === 'paid') return
+
+  await supabaseAdmin
+    .from('merch_orders')
+    .update({
+      status: 'paid',
+      mpesa_receipt_number: p.mpesaReceipt,
+      mpesa_checkout_request_id: p.checkoutRequestId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', order.id)
+
+  await postMerchPayment({
+    orderType: (order.order_type as 'preorder' | 'pos') || 'pos',
+    orderId: order.id as string,
+    amountKes: Number(order.amount_kes ?? p.amount),
+    mpesaReceipt: p.mpesaReceipt,
+  })
 }
 
 async function settleBookingFromKcb(p: {
