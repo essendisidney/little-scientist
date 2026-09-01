@@ -6,6 +6,11 @@ import { staffFetch } from '@/lib/staff-fetch'
 
 const ENQUIRY_STATUSES = ['pending', 'contacted', 'confirmed', 'declined'] as const
 
+function guardianEmailFromNotes(notes?: string | null): string {
+  const m = String(notes || '').match(/Guardian email:\s*(\S+@\S+)/i)
+  return m?.[1] || '—'
+}
+
 type Tab = 'overview' | 'accounting' | 'visitors' | 'enquiries'
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -137,6 +142,7 @@ export default function DashboardPage() {
       guest_count: number
       preferred_date: string
       status: string
+      special_requirements?: string | null
       created_at?: string
     }[]
   >([])
@@ -146,6 +152,7 @@ export default function DashboardPage() {
       school_name: string
       contact_name: string
       contact_phone: string
+      contact_email: string
       student_count: number
       preferred_date: string
       status: string
@@ -216,12 +223,12 @@ export default function DashboardPage() {
       const [bRes, sRes] = await Promise.all([
         supabase
           .from('birthday_enquiries')
-          .select('enquiry_ref, parent_name, phone, guest_count, preferred_date, status, created_at')
+          .select('enquiry_ref, parent_name, phone, guest_count, preferred_date, status, special_requirements, created_at')
           .order('created_at', { ascending: false })
           .limit(40),
         supabase
           .from('school_enquiries')
-          .select('enquiry_ref, school_name, contact_name, contact_phone, student_count, preferred_date, status, created_at')
+          .select('enquiry_ref, school_name, contact_name, contact_phone, contact_email, student_count, preferred_date, status, created_at')
           .order('created_at', { ascending: false })
           .limit(40),
       ])
@@ -963,7 +970,7 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          {['Ref', 'Parent', 'Phone', 'Guests', 'Date', 'Status'].map(h => (
+                          {['Ref', 'Parent', 'Phone', 'Email', 'Guests', 'Date', 'Status'].map(h => (
                             <th
                               key={h}
                               style={{
@@ -992,6 +999,9 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#ffd700' }}>{e.enquiry_ref}</td>
                             <td style={{ padding: '10px 16px' }}>{e.parent_name}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.phone}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+                              {guardianEmailFromNotes(e.special_requirements)}
+                            </td>
                             <td style={{ padding: '10px 16px' }}>{e.guest_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
@@ -1039,7 +1049,7 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          {['Ref', 'School', 'Contact', 'Phone', 'Students', 'Date', 'Status'].map(h => (
+                          {['Ref', 'School', 'Contact', 'Phone', 'Email', 'Students', 'Date', 'Status'].map(h => (
                             <th
                               key={h}
                               style={{
@@ -1069,6 +1079,11 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px' }}>{e.school_name}</td>
                             <td style={{ padding: '10px 16px' }}>{e.contact_name}</td>
                             <td style={{ padding: '10px 16px' }}>{e.contact_phone}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+                              <a href={`mailto:${e.contact_email}`} style={{ color: '#ffd700' }}>
+                                {e.contact_email}
+                              </a>
+                            </td>
                             <td style={{ padding: '10px 16px' }}>{e.student_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>

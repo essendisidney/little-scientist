@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { parseMpesaCallback } from '@/lib/mpesa'
 import { postTicketPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
+import { confirmSessionBooking, bookingHeadcount } from '@/lib/session-pending'
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,15 +59,8 @@ export async function POST(req: NextRequest) {
       }
       await supabaseAdmin.from('tickets').insert(tickets)
 
-      const addCount =
-        (booking.adult_count as number) + (booking.child_count as number) + infantCount
-      const { data: sessionRow } = await supabaseAdmin
-        .from('sessions')
-        .select('booked_count')
-        .eq('id', booking.session_id)
-        .single()
-      const nextBooked = (sessionRow?.booked_count || 0) + addCount
-      await supabaseAdmin.from('sessions').update({ booked_count: nextBooked }).eq('id', booking.session_id)
+      const addCount = bookingHeadcount(booking as { adult_count?: number; child_count?: number; infant_count?: number })
+      await confirmSessionBooking(String(booking.session_id), addCount)
 
       await supabaseAdmin.from('etr_receipts').insert({
         booking_id: booking.id,

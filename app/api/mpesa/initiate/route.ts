@@ -5,6 +5,7 @@ import { normalizeParty, partyHeadcount, validatePaidCheckout } from '@/lib/book
 import { parseVisitType } from '@/lib/visit-type'
 import { BIRTHDAY_PRICING } from '@/lib/pricing'
 import { sessionOpenSpots } from '@/lib/session-capacity'
+import { reserveSessionPending, releaseSessionPending, bookingHeadcount } from '@/lib/session-pending'
 import { createAndSendKcbPayment } from '@/lib/kcb/service'
 import { isKcbConfigured } from '@/lib/kcb/config'
 import { normalizeKenyaPhone } from '@/lib/phone'
@@ -170,6 +171,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Session changed — please start a new booking.' }, { status: 409 })
       }
 
+      if (status === 'expired') {
+        const reserved = await reserveSessionPending(sessionId, partyHeadcount(party))
+        if (!reserved) {
+          return NextResponse.json({ error: 'Not enough spots in this session' }, { status: 409 })
+        }
+      }
+
       const { data: updated, error: upErr } = await supabaseAdmin
         .from('bookings')
         .update({
@@ -187,6 +195,12 @@ export async function POST(req: NextRequest) {
       }
       booking = updated as Record<string, unknown>
     } else {
+      const headcount = partyHeadcount(party)
+      const reserved = await reserveSessionPending(sessionId, headcount)
+      if (!reserved) {
+        return NextResponse.json({ error: 'Not enough spots in this session' }, { status: 409 })
+      }
+
       ;({ data: booking, error: bErr } = await supabaseAdmin
         .from('bookings')
         .insert(bookingPayload)
@@ -215,6 +229,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (bErr || !booking) {
+        await releaseSessionPending(sessionId, headcount)
         const msg = bErr?.message || 'Failed to create booking'
         if (/adult_with_child/i.test(msg)) {
           return NextResponse.json(

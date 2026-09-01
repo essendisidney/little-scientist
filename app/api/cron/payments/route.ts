@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isCronAuthorized } from '@/lib/admin-auth'
 import { markProcessingTimeouts } from '@/lib/kcb/service'
 import { supabaseAdmin } from '@/lib/supabase'
+import { releaseSessionPending, bookingHeadcount } from '@/lib/session-pending'
 
 export const maxDuration = 60
 
@@ -22,7 +23,13 @@ export async function GET(req: NextRequest) {
     .update({ payment_status: 'expired', updated_at: new Date().toISOString() })
     .eq('payment_status', 'pending')
     .lt('created_at', cutoff)
-    .select('id')
+    .select('id, session_id, adult_count, child_count, infant_count')
+
+  for (const b of stale || []) {
+    if (b.session_id) {
+      await releaseSessionPending(String(b.session_id), bookingHeadcount(b))
+    }
+  }
 
   return NextResponse.json({
     ok: true,

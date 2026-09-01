@@ -11,6 +11,7 @@ import { logKcbApiCall, newInternalReference, sanitizePayload } from '@/lib/kcb/
 import type { AppMpesaInitiateInput, KcbPaymentStatus, ParsedKcbCallback } from '@/lib/kcb/types'
 import { postTicketPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
+import { confirmSessionBooking, bookingHeadcount } from '@/lib/session-pending'
 
 type PaymentRow = {
   id: string
@@ -324,14 +325,8 @@ async function settleBookingFromKcb(p: {
     }
     if (tickets.length) await supabaseAdmin.from('tickets').insert(tickets)
 
-    const addCount = (booking.adult_count as number) + (booking.child_count as number) + infantCount
-    const { data: sessionRow } = await supabaseAdmin
-      .from('sessions')
-      .select('booked_count')
-      .eq('id', booking.session_id)
-      .single()
-    const nextBooked = (sessionRow?.booked_count || 0) + addCount
-    await supabaseAdmin.from('sessions').update({ booked_count: nextBooked }).eq('id', booking.session_id)
+    const addCount = bookingHeadcount(booking)
+    await confirmSessionBooking(String(booking.session_id), addCount)
   }
 
   if (paymentId) {

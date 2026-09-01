@@ -2,6 +2,7 @@ export type SessionCapacity = {
   capacity?: number | null
   booked_count?: number | null
   held_count?: number | null
+  pending_count?: number | null
   is_blocked?: boolean | null
 }
 
@@ -14,5 +15,5 @@ function n(v: unknown) {
 /** Tickets still sellable online after booked + admin-held spots. */
 export function sessionOpenSpots(session: SessionCapacity) {
   if (session.is_blocked) return 0
-  return Math.max(0, n(session.capacity) - n(session.booked_count) - n(session.held_count))
+  return Math.max(0, n(session.capacity) - n(session.booked_count) - n(session.held_count) - n(session.pending_count))
 }
