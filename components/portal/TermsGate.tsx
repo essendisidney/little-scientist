@@ -73,8 +73,29 @@ export default function TermsGate({
             lineHeight: 1.4,
           }}
         >
-          Open and read the waiver below before you can accept.
+          Tap <strong>terms and conditions</strong> below to read the waiver on this page before you accept.
         </p>
+      )}
+      {!viewerOpen && opened && (
+        <button
+          type="button"
+          onClick={openWaiver}
+          style={{
+            display: 'block',
+            width: '100%',
+            marginBottom: 12,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid rgba(255,217,74,0.35)',
+            background: 'rgba(255,217,74,0.1)',
+            color: '#FFD94A',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Open waiver to read
+        </button>
       )}
       <label
         style={{

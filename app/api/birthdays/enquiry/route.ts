@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { sendInfoEmail } from '@/lib/email'
+import { sendInfoEmail, sendGuestEmail } from '@/lib/email'
 import { BIRTHDAY_FOOD_NOTICE } from '@/lib/pricing'
+import { sanitizeGuestError } from '@/lib/guest-errors'
 
 function makeRef() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -44,7 +45,6 @@ export async function POST(req: NextRequest) {
 
     const payload = {
       parent_name: String(parentName),
-      // Legacy column — child name no longer collected; store guardian label for ops.
       child_name: String(parentName),
       child_age: 0,
       guest_count: Number(guestCount),
@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
     }
 
     const { error: insErr } = await supabaseAdmin.from('birthday_enquiries').insert(payload)
-    if (insErr) return NextResponse.json({ error: 'Failed to save enquiry' }, { status: 500 })
+    if (insErr) {
+      return NextResponse.json({ error: sanitizeGuestError(insErr.message) }, { status: 500 })
+    }
 
     const text = [
       'New birthday enquiry (Little Scientist)',
@@ -81,10 +83,29 @@ export async function POST(req: NextRequest) {
       text,
     })
 
+    await sendGuestEmail({
+      to: emailStr,
+      subject: `Little Scientist birthday enquiry — ${enquiryRef}`,
+      text: [
+        `Hi ${payload.parent_name},`,
+        '',
+        'Thank you — we received your birthday party enquiry.',
+        '',
+        `Reference: ${enquiryRef}`,
+        `Preferred date: ${payload.preferred_date}`,
+        `Guests: ${payload.guest_count}`,
+        '',
+        'Our team will contact you by email or phone.',
+        '',
+        '— Little Scientist',
+        '0700 101 425 · info@littlescientist.ke',
+      ].join('\n'),
+    })
+
     return NextResponse.json({ success: true, enquiryRef })
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to submit enquiry' },
+      { error: sanitizeGuestError(err instanceof Error ? err.message : 'Failed to submit enquiry') },
       { status: 500 },
     )
   }

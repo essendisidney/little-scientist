@@ -17,6 +17,7 @@ import {
 import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
 import WatermarkBg from '@/components/portal/WatermarkBg'
+import { isValidKenyaPhone } from '@/lib/phone'
 
 const DEFAULT_PRICING = {
   adult18PlusKes: 1000,
@@ -511,8 +512,8 @@ export default function BookPage() {
       setError('Please read and accept the Terms and Conditions to continue.')
       return
     }
-    if (!phone || phone.replace(/\s/g, '').length < 9) {
-      setError('Enter a valid M-Pesa phone number')
+    if (!phone || !isValidKenyaPhone(phone)) {
+      setError('Enter a valid Kenyan mobile number (07… / 01… / 254…).')
       return
     }
     setLoading(true)
@@ -587,6 +588,7 @@ export default function BookPage() {
           infantCount,
           bookingKind: visitType,
           partyMeta,
+          existingBookingRef: bookingRef || undefined,
         }),
       })
       const raw = await res.text()
@@ -1684,7 +1686,7 @@ export default function BookPage() {
                       setTermsRead={setTermsRead}
                       setTermsConsent={setTermsConsent}
                     />
-                    {error && <div className="err">{error}</div>}
+                    {error && <div className="err" role="alert" aria-live="polite">{error}</div>}
                     <button
                       className="btn-go"
                       onClick={proceedFromCountersToPayment}
@@ -1742,7 +1744,7 @@ export default function BookPage() {
                             setTermsConsent(v)
                           }}
                         />
-                        {error && <div className="err">{error}</div>}
+                        {error && <div className="err" role="alert" aria-live="polite">{error}</div>}
                         <button
                           type="button"
                           className="btn-go"
@@ -1760,7 +1762,7 @@ export default function BookPage() {
 
                     {visitType !== 'general' && (
                       <>
-                        {error && <div className="err">{error}</div>}
+                        {error && <div className="err" role="alert" aria-live="polite">{error}</div>}
                         <button className="btn-go" onClick={proceedFromCountersToPayment}>
                           Continue to payment →
                         </button>
@@ -1931,7 +1933,7 @@ export default function BookPage() {
                   }}
                 />
 
-                {error && <div className="err">{error}</div>}
+                {error && <div className="err" role="alert" aria-live="polite">{error}</div>}
                 <button
                   type="button"
                   className="btn-go"
@@ -1984,9 +1986,18 @@ export default function BookPage() {
                   </p>
                 )}
                 {error && (
-                  <div className="err" style={{ maxWidth: 360, margin: '16px auto 0', textAlign: 'left' }}>
+                  <div className="err" role="alert" aria-live="polite" style={{ maxWidth: 360, margin: '16px auto 0', textAlign: 'left' }}>
                     {error}
                   </div>
+                )}
+                {bookingRef && (
+                  <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.45)', maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
+                    Booking ref <strong style={{ color: '#FFD94A', fontFamily: 'monospace' }}>{bookingRef}</strong>
+                    {' · '}
+                    <a href={`/ticket/${bookingRef}`} style={{ color: '#FFD94A' }}>
+                      View ticket
+                    </a>
+                  </p>
                 )}
                 <div style={{ marginTop: 22, maxWidth: 360, marginLeft: 'auto', marginRight: 'auto' }}>
                   <button

@@ -3,12 +3,13 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 import { sessionOpenSpots } from '@/lib/session-capacity'
 
-type Tab = 'overview' | 'accounting' | 'visitors'
+type Tab = 'overview' | 'accounting' | 'visitors' | 'enquiries'
 
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'Bookings',
   accounting: 'Payments & export',
   visitors: 'Customer records',
+  enquiries: 'Enquiries',
 }
 
 function toCsv(rows: Record<string, unknown>[]) {
@@ -125,6 +126,30 @@ export default function DashboardPage() {
   const [exporting, setExporting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [blockingId, setBlockingId] = useState<string | null>(null)
+  const [birthdayEnquiries, setBirthdayEnquiries] = useState<
+    {
+      enquiry_ref: string
+      parent_name: string
+      phone: string
+      guest_count: number
+      preferred_date: string
+      status: string
+      created_at?: string
+    }[]
+  >([])
+  const [schoolEnquiries, setSchoolEnquiries] = useState<
+    {
+      enquiry_ref: string
+      school_name: string
+      contact_name: string
+      contact_phone: string
+      student_count: number
+      preferred_date: string
+      status: string
+      created_at?: string
+    }[]
+  >([])
+  const [enquiriesLoading, setEnquiriesLoading] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -179,6 +204,33 @@ export default function DashboardPage() {
     }
     load()
   }, [selectedDate])
+
+  useEffect(() => {
+    if (tab !== 'enquiries') return
+    let alive = true
+    ;(async () => {
+      setEnquiriesLoading(true)
+      const [bRes, sRes] = await Promise.all([
+        supabase
+          .from('birthday_enquiries')
+          .select('enquiry_ref, parent_name, phone, guest_count, preferred_date, status, created_at')
+          .order('created_at', { ascending: false })
+          .limit(40),
+        supabase
+          .from('school_enquiries')
+          .select('enquiry_ref, school_name, contact_name, contact_phone, student_count, preferred_date, status, created_at')
+          .order('created_at', { ascending: false })
+          .limit(40),
+      ])
+      if (!alive) return
+      setBirthdayEnquiries((bRes.data || []) as typeof birthdayEnquiries)
+      setSchoolEnquiries((sRes.data || []) as typeof schoolEnquiries)
+      setEnquiriesLoading(false)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [tab])
 
   function slotEdit(s: { id?: string; time_slot: string; capacity: number; held_count?: number }) {
     const key = s.id || s.time_slot
@@ -373,7 +425,7 @@ export default function DashboardPage() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 24 }}>
-          {(['overview', 'accounting', 'visitors'] as Tab[]).map(t => (
+          {(['overview', 'accounting', 'visitors', 'enquiries'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -864,6 +916,155 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {tab === 'enquiries' && (
+          <div style={{ display: 'grid', gap: 20 }}>
+            {enquiriesLoading ? (
+              <p style={{ color: 'rgba(255,255,255,0.45)', padding: 20 }}>Loading enquiries…</p>
+            ) : (
+              <>
+                <div
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{ padding: '16px 20px', fontWeight: 800, fontSize: 16 }}>
+                    Birthday enquiries ({birthdayEnquiries.length})
+                  </div>
+                  {birthdayEnquiries.length === 0 ? (
+                    <p style={{ padding: '0 20px 16px', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>No birthday enquiries yet.</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                          {['Ref', 'Parent', 'Phone', 'Guests', 'Date', 'Status'].map(h => (
+                            <th
+                              key={h}
+                              style={{
+                                padding: '10px 16px',
+                                textAlign: 'left' as const,
+                                color: 'rgba(255,255,255,0.4)',
+                                fontSize: 11,
+                                textTransform: 'uppercase' as const,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {birthdayEnquiries.map((e, i) => (
+                          <tr
+                            key={e.enquiry_ref}
+                            style={{
+                              borderTop: '1px solid rgba(255,255,255,0.06)',
+                              background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                            }}
+                          >
+                            <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#ffd700' }}>{e.enquiry_ref}</td>
+                            <td style={{ padding: '10px 16px' }}>{e.parent_name}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.phone}</td>
+                            <td style={{ padding: '10px 16px' }}>{e.guest_count}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span
+                                style={{
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  background: 'rgba(255,217,74,0.1)',
+                                  color: '#ffd700',
+                                }}
+                              >
+                                {e.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{ padding: '16px 20px', fontWeight: 800, fontSize: 16 }}>
+                    School enquiries ({schoolEnquiries.length})
+                  </div>
+                  {schoolEnquiries.length === 0 ? (
+                    <p style={{ padding: '0 20px 16px', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>No school enquiries yet.</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                          {['Ref', 'School', 'Contact', 'Phone', 'Students', 'Date', 'Status'].map(h => (
+                            <th
+                              key={h}
+                              style={{
+                                padding: '10px 16px',
+                                textAlign: 'left' as const,
+                                color: 'rgba(255,255,255,0.4)',
+                                fontSize: 11,
+                                textTransform: 'uppercase' as const,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {schoolEnquiries.map((e, i) => (
+                          <tr
+                            key={e.enquiry_ref}
+                            style={{
+                              borderTop: '1px solid rgba(255,255,255,0.06)',
+                              background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                            }}
+                          >
+                            <td style={{ padding: '10px 16px', fontFamily: 'monospace', color: '#ffd700' }}>{e.enquiry_ref}</td>
+                            <td style={{ padding: '10px 16px' }}>{e.school_name}</td>
+                            <td style={{ padding: '10px 16px' }}>{e.contact_name}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.contact_phone}</td>
+                            <td style={{ padding: '10px 16px' }}>{e.student_count}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span
+                                style={{
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  background: 'rgba(255,217,74,0.1)',
+                                  color: '#ffd700',
+                                }}
+                              >
+                                {e.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

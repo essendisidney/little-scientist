@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto'
 import { getKcbConfig } from './config'
 import { kcbFetchJson } from './client'
 import { KcbApiError, KcbValidationError } from './errors'
+import { normalizeKenyaPhone as normalizeKenyaPhoneLib } from '@/lib/phone'
 import type {
   AppMpesaInitiateInput,
   KcbStkCallbackBody,
@@ -19,14 +20,11 @@ const INVOICE_MAX = 24
 const MESSAGE_ID_MAX = 32
 
 export function normalizeKenyaPhone(phone: string): string {
-  const cleaned = phone.replace(/\s+/g, '').replace(/^\+/, '')
-  if (/^07\d{8}$/.test(cleaned) || /^01\d{8}$/.test(cleaned)) {
-    return `254${cleaned.slice(1)}`
+  try {
+    return normalizeKenyaPhoneLib(phone)
+  } catch {
+    throw new KcbValidationError('Enter a valid Kenyan mobile number (07… / 01… / 254…)')
   }
-  if (/^2547\d{8}$/.test(cleaned) || /^2541\d{8}$/.test(cleaned)) {
-    return cleaned
-  }
-  throw new KcbValidationError('Enter a valid Kenyan mobile number (07… / 01… / 254…)')
 }
 
 export function validateInitiateInput(input: AppMpesaInitiateInput) {

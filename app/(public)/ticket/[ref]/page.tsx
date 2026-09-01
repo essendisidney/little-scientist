@@ -2,7 +2,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import QRCode from 'react-qr-code'
-import { computeBasket } from '@/lib/pricing'
+import { computeBasket, DEFAULT_TIERS, BIRTHDAY_PRICING } from '@/lib/pricing'
 
 type Booking = {
   id: string
@@ -10,8 +10,10 @@ type Booking = {
   booker_name: string | null
   adult_count: number
   child_count: number
+  infant_count?: number
   total_amount_kes: number
   payment_status: string
+  booking_kind?: string
   sessions: { session_date: string; time_slot: string }
 }
 type Ticket = {
@@ -37,6 +39,7 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [pendingPayment, setPendingPayment] = useState(false)
 
   function Wrap({ children, right }: { children: ReactNode; right?: ReactNode }) {
     return (
@@ -124,36 +127,77 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
   }
 
   useEffect(() => {
+    let alive = true
+    let pollIv: ReturnType<typeof setInterval> | undefined
+
+    async function loadTickets(bookingId: string) {
+      const { data: t } = await supabase.from('tickets').select('*').eq('booking_id', bookingId).order('ticket_type')
+      if (!alive) return
+      setTickets((t || []) as Ticket[])
+      setLoading(false)
+    }
+
+    async function checkStatus() {
+      const res = await fetch(`/api/bookings/status?ref=${encodeURIComponent(params.ref.toUpperCase())}`)
+      const data = (await res.json().catch(() => null)) as { paymentStatus?: string } | null
+      return String(data?.paymentStatus || '').toLowerCase()
+    }
+
     async function load() {
+      setLoading(true)
+      setError('')
+      setPendingPayment(false)
+
       const { data: b } = await supabase
         .from('bookings')
         .select('*, sessions(session_date, time_slot)')
         .eq('booking_ref', params.ref.toUpperCase())
         .single()
 
+      if (!alive) return
+
       if (!b) {
         setError('Booking not found.')
         setLoading(false)
         return
       }
+
       if (b.payment_status !== 'paid') {
-        setError('Payment not confirmed yet. Please wait a moment and refresh.')
+        setPendingPayment(true)
+        setBooking(b as Booking)
         setLoading(false)
+
+        pollIv = setInterval(async () => {
+          try {
+            const status = await checkStatus()
+            if (status === 'paid') {
+              if (pollIv) clearInterval(pollIv)
+              const { data: fresh } = await supabase
+                .from('bookings')
+                .select('*, sessions(session_date, time_slot)')
+                .eq('booking_ref', params.ref.toUpperCase())
+                .single()
+              if (!alive || !fresh) return
+              setPendingPayment(false)
+              setBooking(fresh as Booking)
+              await loadTickets(fresh.id)
+            }
+          } catch {
+            /* keep polling */
+          }
+        }, 3000)
         return
       }
 
       setBooking(b as Booking)
-
-      const { data: t } = await supabase
-        .from('tickets')
-        .select('*')
-        .eq('booking_id', b.id)
-        .order('ticket_type')
-
-      setTickets((t || []) as Ticket[])
-      setLoading(false)
+      await loadTickets(b.id)
     }
+
     load()
+    return () => {
+      alive = false
+      if (pollIv) clearInterval(pollIv)
+    }
   }, [params.ref])
 
   if (loading) {
@@ -171,6 +215,40 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
           }}
         >
           Loading tickets...
+        </div>
+      </Wrap>
+    )
+  }
+
+  if (pendingPayment && booking) {
+    return (
+      <Wrap>
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '26px 0', textAlign: 'center' }}>
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 999,
+              background: 'rgba(255,217,74,0.12)',
+              border: '1px solid rgba(255,217,74,0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 34,
+              margin: '0 auto 16px',
+            }}
+          >
+            ⏳
+          </div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 28, marginBottom: 8, color: '#fff' }}>
+            Confirming payment…
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.65, maxWidth: 600, margin: '0 auto' }}>
+            Reference <strong style={{ color: '#FFD94A' }}>{booking.booking_ref}</strong>. This page updates automatically when M-Pesa confirms.
+          </p>
+          <p style={{ marginTop: 12, color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+            Paid but still waiting? Keep this tab open for a minute.
+          </p>
         </div>
       </Wrap>
     )
@@ -218,7 +296,23 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
   }
 
   const session = booking?.sessions as { session_date: string; time_slot: string }
-  const basket = booking ? computeBasket(booking.adult_count, booking.child_count) : null
+  const infantCount = Number(booking?.infant_count || 0)
+  const isBirthday = booking?.booking_kind === 'birthday'
+  const receiptTiers = isBirthday
+    ? DEFAULT_TIERS.map(t =>
+        t.key === 'infant'
+          ? { ...t, priceInclVat: BIRTHDAY_PRICING.childUnder95cmKes, free: false, sublabel: 'Under 95cm — birthday rate' }
+          : t.key === 'adult'
+            ? { ...t, priceInclVat: BIRTHDAY_PRICING.adult18PlusKes }
+            : t.key === 'child'
+              ? { ...t, priceInclVat: BIRTHDAY_PRICING.child95cmTo17Kes }
+              : t,
+      )
+    : DEFAULT_TIERS
+  const basket = booking
+    ? computeBasket(booking.adult_count, booking.child_count, receiptTiers, isBirthday ? infantCount : 0)
+    : null
+  const receiptTotal = booking ? Number(booking.total_amount_kes) : 0
 
   return (
     <Wrap
@@ -280,7 +374,8 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
             <div>🕙 {SLOT_LABELS[session.time_slot] || session.time_slot}</div>
             <div>
               👨🏾‍👩🏾‍👧🏾 {booking.adult_count} adult{booking.adult_count > 1 ? 's' : ''} · {booking.child_count} child
-              {booking.child_count > 1 ? 'ren' : ''}
+              {booking.child_count !== 1 ? 'ren' : ''}
+              {infantCount > 0 ? ` · ${infantCount} under 95cm` : ''}
             </div>
           </div>
         </div>
@@ -302,6 +397,9 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
           {[
             { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
             { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
+            ...(isBirthday && infantCount > 0
+              ? [{ label: `Entry fee — Under 95cm × ${infantCount}`, amount: basket.infantTotal }]
+              : []),
           ]
             .filter(i => i.amount > 0)
             .map(item => (
@@ -313,7 +411,9 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 12, paddingTop: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
               <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, letterSpacing: '-0.01em', fontSize: 22, color: '#FFD94A' }}>Total</span>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 500, fontSize: 22, color: '#FFD94A' }}>KES {basket.grandTotalFormatted}</span>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 500, fontSize: 22, color: '#FFD94A' }}>
+                KES {receiptTotal.toLocaleString('en-KE')}
+              </span>
             </div>
             <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.45)', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, lineHeight: 1.7, maxWidth: 600 }}>
               Children 94.9cm and below enter FREE (not ticketed). Please inform gate staff for height checks.

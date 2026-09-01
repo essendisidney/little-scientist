@@ -7,6 +7,8 @@ import { BIRTHDAY_PRICING } from '@/lib/pricing'
 import { sessionOpenSpots } from '@/lib/session-capacity'
 import { createAndSendKcbPayment } from '@/lib/kcb/service'
 import { isKcbConfigured } from '@/lib/kcb/config'
+import { normalizeKenyaPhone } from '@/lib/phone'
+import { sanitizeGuestError } from '@/lib/guest-errors'
 
 export const maxDuration = 60
 
@@ -47,6 +49,20 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
+
+    try {
+      normalizeKenyaPhone(String(phone))
+    } catch {
+      return NextResponse.json(
+        { error: 'Enter a valid Kenyan mobile number (07… / 01… / 254…).' },
+        { status: 400 },
+      )
+    }
+
+    const existingRef = String(body?.existingBookingRef || body?.bookingRef || '')
+      .trim()
+      .toUpperCase()
+    const RETRYABLE = new Set(['pending', 'processing', 'failed', 'cancelled', 'canceled', 'timeout', 'expired'])
 
     if (bookingKind === 'birthday') {
       const email = String((partyMeta as { email?: string } | null)?.email || body?.email || '').trim()
@@ -119,46 +135,91 @@ export async function POST(req: NextRequest) {
       payment_status: 'pending',
     }
 
-    let { data: booking, error: bErr } = await supabaseAdmin
-      .from('bookings')
-      .insert(bookingPayload)
-      .select()
-      .single()
+    let booking: Record<string, unknown> | null = null
+    let bErr: { message?: string } | null = null
 
-    if (bErr && /(infant_count|booking_kind|party_meta)/i.test(bErr.message || '')) {
-      const retry = { ...bookingPayload }
-      if (/infant_count/i.test(bErr.message || '')) {
-        delete retry.infant_count
-        if (childCount === 0 && infantCount > 0) {
+    if (existingRef) {
+      const { data: existing, error: findErr } = await supabaseAdmin
+        .from('bookings')
+        .select('*')
+        .eq('booking_ref', existingRef)
+        .maybeSingle()
+
+      if (findErr || !existing) {
+        return NextResponse.json({ error: 'Booking not found. Start a new payment.' }, { status: 404 })
+      }
+      const status = String(existing.payment_status || '').toLowerCase()
+      if (status === 'paid') {
+        return NextResponse.json({ error: 'This booking is already paid.' }, { status: 409 })
+      }
+      if (!RETRYABLE.has(status)) {
+        return NextResponse.json({ error: 'This booking cannot be retried. Please start again.' }, { status: 409 })
+      }
+      if (String(existing.session_id) !== String(sessionId)) {
+        return NextResponse.json({ error: 'Session changed — please start a new booking.' }, { status: 409 })
+      }
+
+      const { data: updated, error: upErr } = await supabaseAdmin
+        .from('bookings')
+        .update({
+          booker_phone: phone,
+          booker_name: name || null,
+          payment_status: 'pending',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (upErr || !updated) {
+        return NextResponse.json({ error: sanitizeGuestError(upErr?.message || 'Could not retry payment') }, { status: 500 })
+      }
+      booking = updated as Record<string, unknown>
+    } else {
+      ;({ data: booking, error: bErr } = await supabaseAdmin
+        .from('bookings')
+        .insert(bookingPayload)
+        .select()
+        .single())
+
+      if (bErr && /(infant_count|booking_kind|party_meta)/i.test(bErr.message || '')) {
+        const retry = { ...bookingPayload }
+        if (/infant_count/i.test(bErr.message || '')) {
+          delete retry.infant_count
+          if (childCount === 0 && infantCount > 0) {
+            return NextResponse.json(
+              {
+                error:
+                  'Free under-95cm bookings need a database update. Please call 0700 101 425.',
+              },
+              { status: 400 },
+            )
+          }
+        }
+        if (/booking_kind|party_meta/i.test(bErr.message || '')) {
+          delete retry.booking_kind
+          delete retry.party_meta
+        }
+        ;({ data: booking, error: bErr } = await supabaseAdmin.from('bookings').insert(retry).select().single())
+      }
+
+      if (bErr || !booking) {
+        const msg = bErr?.message || 'Failed to create booking'
+        if (/adult_with_child/i.test(msg)) {
           return NextResponse.json(
             {
               error:
-                'Under-95cm tickets need the infant_count database update. Apply migration 006_booking_infant_count.sql.',
+                'Adult + free under-95cm bookings are temporarily blocked. Please retry shortly or add a paid child ticket.',
             },
-            { status: 400 },
+            { status: 500 },
           )
         }
+        return NextResponse.json({ error: sanitizeGuestError(msg) }, { status: 500 })
       }
-      if (/booking_kind|party_meta/i.test(bErr.message || '')) {
-        delete retry.booking_kind
-        delete retry.party_meta
-      }
-      ;({ data: booking, error: bErr } = await supabaseAdmin.from('bookings').insert(retry).select().single())
     }
 
-    if (bErr || !booking) {
-      const msg = bErr?.message || 'Failed to create booking'
-      if (/adult_with_child/i.test(msg)) {
-        return NextResponse.json(
-          {
-            error:
-              'Adult + free under-95cm bookings are temporarily blocked by a database rule. Please retry in a moment, or add a paid child ticket.',
-          },
-          { status: 500 },
-        )
-      }
-      return NextResponse.json({ error: msg }, { status: 500 })
-    }
+    const bookingId = String(booking.id)
+    const bookingRef = String(booking.booking_ref)
 
     const stkDescription =
       bookingKind === 'birthday' ? 'LS Birthday' : bookingKind === 'school' ? 'LS School Trip' : 'LS Tickets'
@@ -178,15 +239,15 @@ export async function POST(req: NextRequest) {
         const kcb = await createAndSendKcbPayment({
           amount: total,
           phoneNumber: phone,
-          reference: booking.booking_ref,
+          reference: bookingRef,
           description: stkDescription,
-          idempotencyKey: `booking:${booking.id}`,
+          idempotencyKey: `booking:${bookingId}`,
           sourceType: 'booking',
-          sourceId: booking.id,
+          sourceId: bookingId,
         })
 
         await supabaseAdmin.from('payments').insert({
-          booking_id: booking.id,
+          booking_id: bookingId,
           payment_channel: 'kcb_buni',
           amount_kes: total,
           mpesa_checkout_request_id: kcb.payment.kcb_reference,
@@ -198,15 +259,15 @@ export async function POST(req: NextRequest) {
         await supabaseAdmin.from('audit_log').insert({
           action: 'PAYMENT_INITIATED',
           entity: 'bookings',
-          entity_id: booking.id,
+          entity_id: bookingId,
           performed_by: 'public',
           metadata: { booking_kind: bookingKind, party_meta: partyMeta, provider: 'kcb_buni' },
         })
 
         return NextResponse.json({
           success: true,
-          bookingRef: booking.booking_ref,
-          bookingId: booking.id,
+          bookingRef,
+          bookingId,
           checkoutRequestId: kcb.payment.kcb_reference,
           provider: 'kcb',
         })
@@ -230,13 +291,13 @@ export async function POST(req: NextRequest) {
     const stk = await initiateSTKPush({
       phone,
       amount: total,
-      reference: booking.booking_ref,
+      reference: bookingRef,
       description: stkDescription,
       callbackUrl,
     })
 
     await supabaseAdmin.from('payments').insert({
-      booking_id: booking.id,
+      booking_id: bookingId,
       payment_channel: 'mpesa',
       amount_kes: total,
       mpesa_checkout_request_id: stk.checkoutRequestId,
@@ -248,24 +309,25 @@ export async function POST(req: NextRequest) {
     await supabaseAdmin.from('audit_log').insert({
       action: 'PAYMENT_INITIATED',
       entity: 'bookings',
-      entity_id: booking.id,
+      entity_id: bookingId,
       performed_by: 'public',
       metadata: { booking_kind: bookingKind, party_meta: partyMeta, provider: 'daraja' },
     })
 
     return NextResponse.json({
       success: true,
-      bookingRef: booking.booking_ref,
-      bookingId: booking.id,
+      bookingRef,
+      bookingId,
       checkoutRequestId: stk.checkoutRequestId,
       provider: 'daraja',
     })
   } catch (err) {
     console.error('Initiate error:', err)
-    const message =
+    const message = sanitizeGuestError(
       err instanceof Error && err.message
         ? err.message
-        : 'Payment initiation failed. Please try again or call 0700 101 425.'
+        : 'Payment initiation failed. Please try again or call 0700 101 425.',
+    )
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

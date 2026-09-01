@@ -6,9 +6,12 @@ import WatermarkBg from '@/components/portal/WatermarkBg'
 import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
 import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo } from '../book/VisitTypeUi'
+import { toLocalDateKey } from '@/lib/dates'
+import { isValidKenyaPhone } from '@/lib/phone'
 
 export default function SchoolsPage() {
   const [sessionMode, setSessionMode] = useState<'shared' | 'exclusive'>('shared')
+  const [schoolName, setSchoolName] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -22,10 +25,7 @@ export default function SchoolsPage() {
   const [success, setSuccess] = useState(false)
   const [enquiryRef, setEnquiryRef] = useState('')
 
-  const minDate = useMemo(() => {
-    const d = new Date()
-    return d.toISOString().split('T')[0]
-  }, [])
+  const minDate = useMemo(() => toLocalDateKey(), [])
 
   async function submit() {
     setError('')
@@ -33,8 +33,12 @@ export default function SchoolsPage() {
       setError('Please read and accept the Terms and Conditions.')
       return
     }
-    if (!name.trim() || !phone.trim() || !email.includes('@') || !date || adults < 1) {
+    if (!schoolName.trim() || !name.trim() || !phone.trim() || !email.includes('@') || !date || adults < 1) {
       setError('Please complete all required fields.')
+      return
+    }
+    if (!isValidKenyaPhone(phone)) {
+      setError('Enter a valid Kenyan mobile number (07… / 01… / 254…).')
       return
     }
     if (children < 20) {
@@ -47,7 +51,7 @@ export default function SchoolsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          schoolName: name.trim(),
+          schoolName: schoolName.trim(),
           contactName: name.trim(),
           contactPhone: phone.trim(),
           contactEmail: email.trim(),
@@ -89,6 +93,7 @@ export default function SchoolsPage() {
             </p>
             <h2 className="mt-3 font-[family-name:var(--font-heading)] text-xl font-bold">Request sent</h2>
             {enquiryRef && <p className="mt-2 font-mono text-ls-yellow">{enquiryRef}</p>}
+            <p className="mt-2 text-sm text-white/70">We will contact you by email or phone.</p>
             <DirectReachOut context="Need a tailored school package? Call / WhatsApp / Email us." />
           </div>
         ) : (
@@ -109,7 +114,9 @@ export default function SchoolsPage() {
               }}
             />
 
-            <FieldLabel>Adult&apos;s Full Name *</FieldLabel>
+            <FieldLabel>School name *</FieldLabel>
+            <input style={bookFieldStyle} value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="e.g. Greenfield Academy" />
+            <FieldLabel>Contact person (adult) *</FieldLabel>
             <input style={bookFieldStyle} value={name} onChange={e => setName(e.target.value)} />
             <FieldLabel>Phone *</FieldLabel>
             <input style={bookFieldStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
@@ -154,7 +161,11 @@ export default function SchoolsPage() {
 
             <DirectReachOut context="Need a tailored school package? Call / WhatsApp / Email us." />
             <TermsGate visitType="school" checked={termsOk} onCheckedChange={setTermsOk} />
-            {error && <p className="mb-3 text-sm font-semibold text-red-300">{error}</p>}
+            {error && (
+              <p className="mb-3 text-sm font-semibold text-red-300" role="alert" aria-live="polite">
+                {error}
+              </p>
+            )}
             <button
               type="button"
               onClick={submit}

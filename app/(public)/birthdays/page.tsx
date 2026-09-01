@@ -6,6 +6,8 @@ import WatermarkBg from '@/components/portal/WatermarkBg'
 import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
 import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo } from '../book/VisitTypeUi'
+import { toLocalDateKey } from '@/lib/dates'
+import { isValidKenyaPhone } from '@/lib/phone'
 
 const MIN_CHILDREN = 20
 const MIN_ADULTS = 2
@@ -25,10 +27,7 @@ export default function BirthdaysPage() {
   const [success, setSuccess] = useState(false)
   const [enquiryRef, setEnquiryRef] = useState('')
 
-  const minDate = useMemo(() => {
-    const d = new Date()
-    return d.toISOString().split('T')[0]
-  }, [])
+  const minDate = useMemo(() => toLocalDateKey(), [])
 
   async function submit() {
     setError('')
@@ -38,6 +37,10 @@ export default function BirthdaysPage() {
     }
     if (!name.trim() || !phone.trim() || !email.includes('@') || !date) {
       setError('Please complete all required fields.')
+      return
+    }
+    if (!isValidKenyaPhone(phone)) {
+      setError('Enter a valid Kenyan mobile number (07… / 01… / 254…).')
       return
     }
     if (children < MIN_CHILDREN) {
