@@ -13,11 +13,28 @@ export default function LoginPage() {
   async function handleLogin() {
     setError('')
     setLoading(true)
-    const { error: e } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: e } = await supabase.auth.signInWithPassword({ email, password })
     if (e) {
       setError(e.message)
       setLoading(false)
-    } else router.replace('/admin/dashboard')
+      return
+    }
+
+    const raw =
+      data.user?.app_metadata?.role ??
+      data.user?.user_metadata?.role ??
+      data.user?.app_metadata?.roles?.[0] ??
+      data.user?.user_metadata?.roles?.[0]
+    const role = typeof raw === 'string' ? raw.toLowerCase() : 'admin'
+    const dest =
+      role === 'gate'
+        ? '/admin/verify'
+        : role === 'counter'
+          ? '/admin/invenue'
+          : role === 'accounting'
+            ? '/admin/accounting'
+            : '/admin/dashboard'
+    router.replace(dest)
   }
 
   return (
