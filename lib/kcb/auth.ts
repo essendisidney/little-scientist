@@ -24,10 +24,12 @@ export async function getKcbAccessToken(opts?: { forceRefresh?: boolean }): Prom
   const config = getKcbConfig()
   const basic = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')
 
-  // Portal Production Keys use accounts.buni…/oauth2/token with grant_type in the body only.
+  // Production go-live (api.buni) and accounts.buni oauth2: grant_type in body.
   // Gateway-style UAT uses …/token?grant_type=client_credentials (often empty body).
-  const isAccountsOauth = /accounts\.buni\.kcbgroup\.com/i.test(config.tokenUrl)
-  const url = isAccountsOauth
+  const isBodyGrant =
+    /accounts\.buni\.kcbgroup\.com/i.test(config.tokenUrl) ||
+    /api\.buni\.kcbgroup\.com/i.test(config.tokenUrl)
+  const url = isBodyGrant
     ? config.tokenUrl.replace(/\?.*$/, '')
     : config.tokenUrl.includes('grant_type=')
       ? config.tokenUrl
@@ -42,8 +44,8 @@ export async function getKcbAccessToken(opts?: { forceRefresh?: boolean }): Prom
         Authorization: `Basic ${basic}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: isAccountsOauth ? 'grant_type=client_credentials' : '',
-      signal: AbortSignal.timeout(20_000),
+      body: isBodyGrant ? 'grant_type=client_credentials' : '',
+      signal: AbortSignal.timeout(25_000),
     })
   } catch (err) {
     throw new KcbAuthError('KCB token request timed out or failed to connect', {
