@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, type ReactNode } from 'react'
+import { useParams } from 'next/navigation'
 import QRCode from 'react-qr-code'
 import { computeBasket, DEFAULT_TIERS, BIRTHDAY_PRICING } from '@/lib/pricing'
 
@@ -33,7 +34,9 @@ const SLOT_LABELS: Record<string, string> = {
   '15:00-17:00': '3:00 PM – 5:00 PM',
 }
 
-export default function TicketPage({ params }: { params: { ref: string } }) {
+export default function TicketPage() {
+  const routeParams = useParams()
+  const refParam = String(routeParams?.ref || '').trim().toUpperCase()
   const [booking, setBooking] = useState<Booking | null>(null)
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,11 +133,18 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
     let pollIv: ReturnType<typeof setInterval> | undefined
 
     async function loadFromApi() {
+      if (!refParam) {
+        setError('Missing booking reference in the link.')
+        setLoading(false)
+        return
+      }
+
       try {
         const ctrl = new AbortController()
-        const timeout = setTimeout(() => ctrl.abort(), 20000)
-        const res = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(String(params.ref).toUpperCase())}`, {
+        const timeout = setTimeout(() => ctrl.abort(), 15000)
+        const res = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(refParam)}`, {
           signal: ctrl.signal,
+          cache: 'no-store',
         })
         clearTimeout(timeout)
         const data = (await res.json().catch(() => null)) as {
@@ -146,6 +156,22 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
         if (!alive) return
 
         if (!res.ok || !data?.booking) {
+          // Fallback: status endpoint confirms payment even if ticket API is down
+          try {
+            const sRes = await fetch(`/api/bookings/status?ref=${encodeURIComponent(refParam)}`, { cache: 'no-store' })
+            const sData = await sRes.json().catch(() => null)
+            if (sRes.ok && sData?.paymentStatus === 'paid') {
+              setError(
+                data?.error ||
+                  'Payment is confirmed, but ticket details could not load. Refresh this page, or ask staff to open Admin → Issue tickets.',
+              )
+              setPendingPayment(false)
+              setLoading(false)
+              return
+            }
+          } catch {
+            /* ignore */
+          }
           setError(data?.error || 'Could not load this ticket. Check the link or ask staff to reissue.')
           setLoading(false)
           return
@@ -160,7 +186,7 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
 
           pollIv = setInterval(async () => {
             try {
-              const r = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(String(params.ref).toUpperCase())}`)
+              const r = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(refParam)}`, { cache: 'no-store' })
               const d = (await r.json().catch(() => null)) as { booking?: Booking; tickets?: Ticket[] } | null
               if (!alive || !d?.booking) return
               if (d.booking.payment_status === 'paid') {
@@ -174,6 +200,9 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
               /* keep polling */
             }
           }, 3000)
+          setTimeout(() => {
+            if (pollIv) clearInterval(pollIv)
+          }, 120000)
           return
         }
 
@@ -193,7 +222,7 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
       alive = false
       if (pollIv) clearInterval(pollIv)
     }
-  }, [params.ref])
+  }, [refParam])
 
   if (loading) {
     return (
