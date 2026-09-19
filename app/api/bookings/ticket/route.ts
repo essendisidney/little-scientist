@@ -3,6 +3,20 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { reconcileBookingFromKcb } from '@/lib/kcb/service'
 import { ensureTicketsIssued } from '@/lib/tickets'
 
+type TicketBookingRow = {
+  id: string
+  booking_ref: string
+  booker_name: string | null
+  adult_count: number
+  child_count: number
+  infant_count: number | null
+  total_amount_kes: number
+  payment_status: string
+  booking_kind?: string | null
+  session_id: string | null
+  sessions: { session_date: string; time_slot: string } | null
+}
+
 /**
  * GET /api/bookings/ticket?ref=LST-...
  * Public ticket page data — avoids anon Supabase RLS mismatch.
@@ -16,15 +30,44 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing booking ref' }, { status: 400 })
     }
 
-    const { data: booking, error } = await supabaseAdmin
-      .from('bookings')
-      .select(
-        'id, booking_ref, booker_name, adult_count, child_count, infant_count, total_amount_kes, payment_status, booking_kind, session_id, sessions(session_date, time_slot)',
-      )
-      .eq('booking_ref', ref)
-      .maybeSingle()
+    // Prefer full select; fall back if optional columns (e.g. booking_kind) are missing in prod.
+    let booking: TicketBookingRow | null = null
+    let error: { message?: string } | null = null
 
-    if (error || !booking) {
+    {
+      const full = await supabaseAdmin
+        .from('bookings')
+        .select(
+          'id, booking_ref, booker_name, adult_count, child_count, infant_count, total_amount_kes, payment_status, booking_kind, session_id, sessions(session_date, time_slot)',
+        )
+        .eq('booking_ref', ref)
+        .maybeSingle()
+      booking = full.data as TicketBookingRow | null
+      error = full.error
+    }
+
+    if (error && /booking_kind|infant_count|column/i.test(String(error.message || ''))) {
+      const slim = await supabaseAdmin
+        .from('bookings')
+        .select(
+          'id, booking_ref, booker_name, adult_count, child_count, infant_count, total_amount_kes, payment_status, session_id, sessions(session_date, time_slot)',
+        )
+        .eq('booking_ref', ref)
+        .maybeSingle()
+      booking = slim.data
+        ? ({ ...slim.data, booking_kind: 'general' } as unknown as TicketBookingRow)
+        : null
+      error = slim.error
+    }
+
+    if (error) {
+      console.error('ticket booking select error', error)
+      return NextResponse.json(
+        { error: 'Could not load booking', detail: error.message },
+        { status: 500 },
+      )
+    }
+    if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
 

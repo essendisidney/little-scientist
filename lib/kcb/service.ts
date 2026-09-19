@@ -256,10 +256,11 @@ export async function processKcbCallback(rawBody: unknown) {
       rawBody,
     })
   } else if (!parsed.success && payment.source_type === 'booking' && payment.source_id) {
-    const bookingStatus = parsed.cancelled ? 'cancelled' : parsed.timedOut ? 'timeout' : 'failed'
+    // DB check only allows pending|paid|failed|refunded — map cancel/timeout → failed
+    const failReason = parsed.cancelled ? 'cancelled' : parsed.timedOut ? 'timeout' : 'failed'
     await supabaseAdmin
       .from('bookings')
-      .update({ payment_status: bookingStatus, updated_at: now })
+      .update({ payment_status: 'failed', updated_at: now })
       .eq('id', payment.source_id)
       .eq('payment_status', 'pending')
 
@@ -267,7 +268,7 @@ export async function processKcbCallback(rawBody: unknown) {
       .from('payments')
       .update({
         status: 'failed',
-        failure_reason: parsed.resultDesc || bookingStatus,
+        failure_reason: parsed.resultDesc || failReason,
         raw_callback: sanitizePayload(rawBody),
       })
       .eq('mpesa_checkout_request_id', parsed.checkoutRequestId)
@@ -278,15 +279,23 @@ export async function processKcbCallback(rawBody: unknown) {
       .eq('id', payment.source_id)
       .eq('payment_status', 'pending')
   } else if (!parsed.success && payment.source_type === 'merch_order' && payment.source_id) {
-    await supabaseAdmin
+    const failPatch = {
+      status: 'failed',
+      payment_status: 'failed',
+      failure_reason: parsed.resultDesc || 'failed',
+      updated_at: now,
+    }
+    const { error: merchFailErr } = await supabaseAdmin
       .from('merch_orders')
-      .update({
-        status: 'failed',
-        failure_reason: parsed.resultDesc || 'failed',
-        updated_at: now,
-      })
+      .update(failPatch)
       .eq('id', payment.source_id)
-      .in('status', ['pending', 'processing'])
+    if (merchFailErr) {
+      await supabaseAdmin
+        .from('merch_orders')
+        .update({ payment_status: 'failed', updated_at: now })
+        .eq('id', payment.source_id)
+        .eq('payment_status', 'pending')
+    }
   }
 
   return { ok: true as const, duplicate: false as const, paymentId: payment.id, status: nextStatus }
@@ -345,22 +354,33 @@ async function settleMerchFromKcb(p: {
 }) {
   const { data: order } = await supabaseAdmin.from('merch_orders').select('*').eq('id', p.orderId).maybeSingle()
 
-  if (!order || order.status === 'paid') return
+  if (!order) return
+  const alreadyPaid = order.status === 'paid' || order.payment_status === 'paid'
+  if (alreadyPaid) return
 
-  await supabaseAdmin
-    .from('merch_orders')
-    .update({
-      status: 'paid',
-      mpesa_receipt_number: p.mpesaReceipt,
-      mpesa_checkout_request_id: p.checkoutRequestId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', order.id)
+  const paidPatch = {
+    status: 'paid',
+    payment_status: 'paid',
+    mpesa_receipt_number: p.mpesaReceipt,
+    mpesa_checkout_request_id: p.checkoutRequestId,
+    updated_at: new Date().toISOString(),
+  }
+  const { error: paidErr } = await supabaseAdmin.from('merch_orders').update(paidPatch).eq('id', order.id)
+  if (paidErr) {
+    await supabaseAdmin
+      .from('merch_orders')
+      .update({
+        payment_status: 'paid',
+        updated_at: new Date().toISOString(),
+        notes: `${order.notes || ''}|paid:${p.mpesaReceipt}`.slice(0, 500),
+      })
+      .eq('id', order.id)
+  }
 
   await postMerchPayment({
     orderType: (order.order_type as 'preorder' | 'pos') || 'pos',
     orderId: order.id as string,
-    amountKes: Number(order.amount_kes ?? p.amount),
+    amountKes: Number(order.amount_kes ?? order.total_kes ?? p.amount),
     mpesaReceipt: p.mpesaReceipt,
   })
 }

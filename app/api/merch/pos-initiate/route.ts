@@ -47,24 +47,65 @@ export async function POST(req: NextRequest) {
 
     const totalKes = Math.round(unit * qty * 100) / 100
 
-    const { data: order, error: oErr } = await supabaseAdmin
-      .from('merch_orders')
-      .insert({
+    // Production schema uses payment_status + total_kes (+ order_type). Optional POS columns added later.
+    const attempts: Record<string, unknown>[] = [
+      {
         booking_id: booking.id,
         order_type: 'pos',
+        payment_status: 'pending',
         status: 'pending',
+        total_kes: totalKes,
         amount_kes: totalKes,
+        subtotal_kes: totalKes,
+        discount_kes: 0,
         product_id: productId,
         quantity: qty,
         unit_price_kes: unit,
-      })
-      .select()
-      .single()
+        customer_phone: phone,
+        notes: `product:${productId};qty:${qty};unit:${unit}`,
+      },
+      {
+        booking_id: booking.id,
+        order_type: 'pos',
+        payment_status: 'pending',
+        total_kes: totalKes,
+        subtotal_kes: totalKes,
+        discount_kes: 0,
+        customer_phone: phone,
+        notes: `product:${productId};qty:${qty};unit:${unit}`,
+      },
+    ]
+
+    let order: { id: string } | null = null
+    let oErr: { message?: string } | null = null
+    for (const payload of attempts) {
+      const res = await supabaseAdmin.from('merch_orders').insert(payload).select('id').single()
+      order = res.data
+      oErr = res.error
+      if (!oErr && order) break
+    }
 
     if (oErr || !order) return NextResponse.json({ error: oErr?.message || 'Failed to create order' }, { status: 500 })
 
+    await supabaseAdmin.from('merch_order_items').insert({
+      order_id: order.id,
+      quantity: qty,
+      unit_price_kes: unit,
+    })
+
     const provider = (process.env.PAYMENT_PROVIDER || (isKcbConfigured() ? 'kcb' : 'daraja')).toLowerCase()
     const useKcb = useKcbPayments()
+
+    async function stampCheckout(checkoutId: string, merchantId: string | null) {
+      const updates: Record<string, unknown>[] = [
+        { mpesa_checkout_request_id: checkoutId, mpesa_merchant_request_id: merchantId },
+        { notes: `product:${productId};qty:${qty};unit:${unit};checkout:${checkoutId}` },
+      ]
+      for (const patch of updates) {
+        const { error } = await supabaseAdmin.from('merch_orders').update(patch).eq('id', order!.id)
+        if (!error) return
+      }
+    }
 
     if (useKcb) {
       if (!isKcbConfigured()) {
@@ -82,13 +123,7 @@ export async function POST(req: NextRequest) {
           sourceId: order.id,
         })
 
-        await supabaseAdmin
-          .from('merch_orders')
-          .update({
-            mpesa_checkout_request_id: kcb.payment.kcb_reference,
-            mpesa_merchant_request_id: kcb.payment.merchant_request_id || null,
-          })
-          .eq('id', order.id)
+        await stampCheckout(String(kcb.payment.kcb_reference || ''), kcb.payment.merchant_request_id || null)
 
         return NextResponse.json({
           success: true,
@@ -116,10 +151,7 @@ export async function POST(req: NextRequest) {
       callbackUrl,
     })
 
-    await supabaseAdmin
-      .from('merch_orders')
-      .update({ mpesa_checkout_request_id: stk.checkoutRequestId, mpesa_merchant_request_id: stk.merchantRequestId })
-      .eq('id', order.id)
+    await stampCheckout(stk.checkoutRequestId, stk.merchantRequestId)
 
     return NextResponse.json({
       success: true,

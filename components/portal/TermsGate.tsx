@@ -22,8 +22,8 @@ const DOC_KEY: Record<VisitType, string> = {
 }
 
 /**
- * Waiver acceptance: guest must open the PDF (new tab / full screen) before the checkbox unlocks.
- * Mobile browsers often show an inert PDF icon inside iframes — so iframe alone does NOT unlock.
+ * Waiver acceptance: checkbox is enough to proceed.
+ * PDF remains available via link / optional viewer — opening it is not required.
  */
 export default function TermsGate({
   checked,
@@ -36,7 +36,6 @@ export default function TermsGate({
 }) {
   const [pdfHref, setPdfHref] = useState(FALLBACK_PDF[visitType])
   const [label, setLabel] = useState(FALLBACK_LABEL[visitType])
-  const [opened, setOpened] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
   const prevVisit = useRef(visitType)
 
@@ -63,26 +62,14 @@ export default function TermsGate({
     prevVisit.current = visitType
     setPdfHref(FALLBACK_PDF[visitType])
     setLabel(FALLBACK_LABEL[visitType])
-    setOpened(false)
     setViewerOpen(false)
     if (checked) onCheckedChange(false)
   }, [visitType, checked, onCheckedChange])
-
-  function markOpened() {
-    setOpened(true)
-    setViewerOpen(true)
-  }
 
   function openInNewTab(e?: MouseEvent) {
     e?.preventDefault()
     e?.stopPropagation()
     window.open(pdfHref, '_blank', 'noopener,noreferrer')
-    markOpened()
-  }
-
-  function onCheckChange(next: boolean) {
-    if (next && !opened) return
-    onCheckedChange(next)
   }
 
   return (
@@ -95,47 +82,13 @@ export default function TermsGate({
         padding: '14px 16px',
       }}
     >
-      {!opened && (
-        <p
-          style={{
-            margin: '0 0 12px',
-            color: 'rgba(255,217,74,0.9)',
-            fontSize: 13,
-            fontWeight: 600,
-            lineHeight: 1.4,
-          }}
-        >
-          Open the waiver PDF first. On phones, tap <strong>Open document</strong> — the checkbox stays locked until you do.
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={openInNewTab}
-        style={{
-          display: 'block',
-          width: '100%',
-          marginBottom: 12,
-          padding: '12px 14px',
-          borderRadius: 10,
-          border: '1px solid rgba(255,217,74,0.45)',
-          background: opened ? 'rgba(74,222,128,0.12)' : 'rgba(255,217,74,0.12)',
-          color: opened ? '#4ade80' : '#FFD94A',
-          fontSize: 14,
-          fontWeight: 800,
-          cursor: 'pointer',
-        }}
-      >
-        {opened ? '✓ Document opened — you can accept below' : 'Open document (required)'}
-      </button>
-
       <label
         style={{
           display: 'flex',
           alignItems: 'flex-start',
           gap: 12,
-          cursor: opened ? 'pointer' : 'not-allowed',
-          color: opened ? '#fff' : 'rgba(255,255,255,0.55)',
+          cursor: 'pointer',
+          color: '#fff',
           fontSize: 14,
           fontWeight: 700,
           lineHeight: 1.5,
@@ -144,15 +97,14 @@ export default function TermsGate({
         <input
           type="checkbox"
           checked={checked}
-          disabled={!opened}
-          onChange={(e) => onCheckChange(e.target.checked)}
+          onChange={(e) => onCheckedChange(e.target.checked)}
           style={{
             marginTop: 3,
             width: 20,
             height: 20,
             accentColor: '#FFC933',
             flexShrink: 0,
-            cursor: opened ? 'pointer' : 'not-allowed',
+            cursor: 'pointer',
           }}
         />
         <span>
@@ -178,6 +130,41 @@ export default function TermsGate({
         </span>
       </label>
 
+      <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        <button
+          type="button"
+          onClick={openInNewTab}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.18)',
+            background: 'rgba(255,255,255,0.06)',
+            color: 'rgba(255,255,255,0.85)',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Open PDF
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewerOpen(v => !v)}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.18)',
+            background: 'rgba(255,255,255,0.06)',
+            color: 'rgba(255,255,255,0.85)',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          {viewerOpen ? 'Hide preview' : 'Preview on page'}
+        </button>
+      </div>
+
       {viewerOpen && (
         <div style={{ marginTop: 14 }}>
           <div
@@ -191,40 +178,6 @@ export default function TermsGate({
             }}
           >
             <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.65)' }}>{label}</span>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                type="button"
-                onClick={() => setViewerOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  color: 'rgba(255,255,255,0.5)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                Hide
-              </button>
-              <button
-                type="button"
-                onClick={openInNewTab}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  color: 'rgba(255,255,255,0.5)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                Open full screen
-              </button>
-            </div>
           </div>
           <iframe
             src={`${pdfHref}#toolbar=0&navpanes=0`}
@@ -237,9 +190,6 @@ export default function TermsGate({
               background: '#fff',
             }}
           />
-          <p style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>
-            If the preview shows only a PDF icon, use <strong>Open document</strong> above.
-          </p>
         </div>
       )}
     </div>
