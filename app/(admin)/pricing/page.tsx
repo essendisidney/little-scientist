@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { staffFetch } from '@/lib/staff-fetch'
 
 type PriceTier = {
   id: string
@@ -43,39 +43,48 @@ export default function PricingAdminPage() {
   async function load() {
     setError('')
     setLoading(true)
-    const { data, error } = await supabase.from('pricing_tiers').select('*').order('price_kes', { ascending: false })
-    if (error) {
-      setError(error.message || 'Failed to load pricing.')
+    try {
+      const res = await staffFetch('/api/admin/pricing')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load pricing.')
+      setTiers((data.tiers || []) as PriceTier[])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load pricing.')
       setTiers([])
+    } finally {
       setLoading(false)
-      return
     }
-    setTiers((data || []) as PriceTier[])
-    setLoading(false)
   }
 
   async function save(tier: PriceTier) {
     const newPrice = editing[tier.id] ?? tier.price_kes
     setSaving(tier.id)
     setError('')
-    const { error } = await supabase
-      .from('pricing_tiers')
-      .update({
-        price_kes: newPrice,
-        updated_at: new Date().toISOString(),
-        updated_by: 'admin',
+    try {
+      const res = await staffFetch('/api/admin/pricing', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tier.id,
+          priceKes: newPrice,
+          free: newPrice === 0,
+        }),
       })
-      .eq('id', tier.id)
-    setSaving(null)
-
-    if (error) {
-      setError(error.message || 'Failed to save price.')
-      return
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save price.')
+      setSaved(tier.id)
+      setTimeout(() => setSaved(null), 2500)
+      setEditing((prev) => {
+        const next = { ...prev }
+        delete next[tier.id]
+        return next
+      })
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save price.')
+    } finally {
+      setSaving(null)
     }
-
-    setSaved(tier.id)
-    setTimeout(() => setSaved(null), 2500)
-    await load()
   }
 
   const inputStyle: React.CSSProperties = useMemo(
@@ -136,7 +145,7 @@ export default function PricingAdminPage() {
             💰 Ticket Pricing
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-            Change prices here — updates live immediately. No code change needed.
+            Edit Adult, Child, and Under-95cm (infant) prices. Set infant to 0 for free general entry; set a price for birthday paid under-95cm.
           </div>
         </div>
 
@@ -173,193 +182,138 @@ export default function PricingAdminPage() {
             lineHeight: 1.6,
           }}
         >
-          ⚠️ All prices are VAT-inclusive at 16%. The system automatically calculates and shows the VAT breakdown on receipts and tickets.
-          <br />
-          The amount shown here is what the customer pays. Example: KES 800 = KES 689.66 entry fee + KES 110.34 VAT.
+          ⚠️ All prices are VAT-inclusive at 16%. The amount shown here is what the customer pays.
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 600 }}>
-          {tiers.map((tier) => {
-            const currentPrice = editing[tier.id] ?? tier.price_kes
-            const vat = vatBreakdown(currentPrice)
-            const isDirty = editing[tier.id] !== undefined && editing[tier.id] !== tier.price_kes
-            const isSaving = saving === tier.id
-            const isSaved = saved === tier.id
+          {tiers.length === 0 ? (
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+              No pricing rows yet. Apply migration 016 (`pricing_tiers`) then refresh.
+            </div>
+          ) : (
+            tiers.map((tier) => {
+              const currentPrice = editing[tier.id] ?? tier.price_kes
+              const vat = vatBreakdown(currentPrice)
+              const isDirty = editing[tier.id] !== undefined && editing[tier.id] !== tier.price_kes
+              const isSaving = saving === tier.id
+              const isSaved = saved === tier.id
+              const emoji = tier.key === 'adult' ? '🧑' : tier.key === 'child' ? '👧' : '👶'
 
-            return (
-              <div
-                key={tier.id}
-                style={{
-                  background: tier.free ? 'rgba(127,255,212,0.05)' : 'rgba(255,255,255,0.04)',
-                  border: `2px solid ${isDirty ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                  borderRadius: 20,
-                  padding: '22px 24px',
-                  transition: 'border-color 0.2s',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontFamily: "'Fredoka One',cursive", fontSize: 20, marginBottom: 4 }}>
-                      {tier.key === 'adult' ? '🧑' : tier.key === 'child' ? '👧' : '👶'} {tier.label}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{tier.sublabel}</div>
-                  </div>
-                  {tier.free && (
-                    <div
-                      style={{
-                        background: 'rgba(127,255,212,0.12)',
-                        border: '1px solid rgba(127,255,212,0.3)',
-                        color: '#7FFFD4',
-                        padding: '4px 14px',
-                        borderRadius: 10,
-                        fontSize: 12,
-                        fontWeight: 800,
-                      }}
-                    >
-                      FREE
-                    </div>
-                  )}
-                </div>
-
-                {!tier.free ? (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end', marginBottom: 14 }}>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: 'rgba(255,255,255,0.4)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.06em',
-                            fontWeight: 800,
-                            marginBottom: 8,
-                          }}
-                        >
-                          Price (VAT-inclusive, KES)
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontFamily: "'Fredoka One',cursive", fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>KES</span>
-                          <input
-                            type="number"
-                            value={editing[tier.id] ?? tier.price_kes}
-                            onChange={(e) => setEditing((prev) => ({ ...prev, [tier.id]: parseInt(e.target.value) || 0 }))}
-                            style={{ ...inputStyle, width: 140, border: '2px solid rgba(255,255,255,0.12)' }}
-                            min={0}
-                            step={50}
-                          />
-                        </div>
+              return (
+                <div
+                  key={tier.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: `2px solid ${isDirty ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                    borderRadius: 20,
+                    padding: '22px 24px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Fredoka One',cursive", fontSize: 20, marginBottom: 4 }}>
+                        {emoji} {tier.label}
                       </div>
-
-                      <button
-                        onClick={() => save(tier)}
-                        disabled={!isDirty || isSaving}
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{tier.sublabel}</div>
+                    </div>
+                    {currentPrice === 0 && (
+                      <div
                         style={{
-                          padding: '12px 22px',
-                          background: isSaved
-                            ? 'rgba(46,204,113,0.3)'
-                            : isDirty
-                              ? 'linear-gradient(135deg,#FF4080,#FF8C00)'
-                              : 'rgba(255,255,255,0.06)',
-                          border: isSaved ? '1px solid rgba(46,204,113,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: 12,
-                          color: '#fff',
-                          fontFamily: "'Fredoka One',cursive",
-                          fontSize: 16,
-                          cursor: isDirty ? 'pointer' : 'default',
-                          opacity: !isDirty && !isSaved ? 0.4 : 1,
-                          transition: 'all 0.2s',
-                          whiteSpace: 'nowrap',
+                          background: 'rgba(127,255,212,0.12)',
+                          border: '1px solid rgba(127,255,212,0.3)',
+                          color: '#7FFFD4',
+                          padding: '4px 14px',
+                          borderRadius: 10,
+                          fontSize: 12,
+                          fontWeight: 800,
                         }}
                       >
-                        {isSaving ? '...' : isSaved ? '✓ Saved!' : 'Save price'}
-                      </button>
-                    </div>
+                        FREE
+                      </div>
+                    )}
+                  </div>
 
-                    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end', marginBottom: 14 }}>
+                    <div>
                       <div
                         style={{
                           fontSize: 11,
-                          color: 'rgba(255,255,255,0.3)',
-                          fontWeight: 800,
+                          color: 'rgba(255,255,255,0.4)',
                           textTransform: 'uppercase',
                           letterSpacing: '0.06em',
+                          fontWeight: 800,
                           marginBottom: 8,
                         }}
                       >
-                        Receipt will show:
+                        Price (VAT-inclusive, KES)
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 4 }}>
-                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Entry fee (excl. VAT)</span>
-                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>KES {vat.excl}</span>
-                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>VAT @ 16%</span>
-                        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>KES {vat.vat}</span>
-                        <span
-                          style={{
-                            fontSize: 14,
-                            color: '#fff',
-                            fontWeight: 900,
-                            borderTop: '1px solid rgba(255,255,255,0.08)',
-                            paddingTop: 6,
-                            marginTop: 4,
-                          }}
-                        >
-                          Total
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 14,
-                            color: '#FFD700',
-                            fontWeight: 900,
-                            borderTop: '1px solid rgba(255,255,255,0.08)',
-                            paddingTop: 6,
-                            marginTop: 4,
-                            textAlign: 'right',
-                          }}
-                        >
-                          KES {vat.incl}
-                        </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontFamily: "'Fredoka One',cursive", fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>KES</span>
+                        <input
+                          type="number"
+                          value={editing[tier.id] ?? tier.price_kes}
+                          onChange={(e) => setEditing((prev) => ({ ...prev, [tier.id]: parseInt(e.target.value) || 0 }))}
+                          style={{ ...inputStyle, width: 140, border: '2px solid rgba(255,255,255,0.12)' }}
+                          min={0}
+                          step={50}
+                        />
                       </div>
                     </div>
 
-                    {tier.updated_at && (
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 10, fontWeight: 700 }}>
-                        Last updated: {new Date(tier.updated_at).toLocaleString('en-KE')}
-                        {tier.updated_by ? ` by ${tier.updated_by}` : ''}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-                    No charge — gate staff verify height on arrival. No ticket issued for this category.
+                    <button
+                      onClick={() => save(tier)}
+                      disabled={!isDirty || isSaving}
+                      style={{
+                        padding: '12px 22px',
+                        background: isSaved
+                          ? 'rgba(46,204,113,0.3)'
+                          : isDirty
+                            ? 'linear-gradient(135deg,#FF4080,#FF8C00)'
+                            : 'rgba(255,255,255,0.06)',
+                        border: isSaved ? '1px solid rgba(46,204,113,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 12,
+                        color: '#fff',
+                        fontFamily: "'Fredoka One',cursive",
+                        fontSize: 16,
+                        cursor: isDirty ? 'pointer' : 'default',
+                        opacity: !isDirty && !isSaved ? 0.4 : 1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {isSaving ? '...' : isSaved ? '✓ Saved!' : 'Save price'}
+                    </button>
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
 
-        <div
-          style={{
-            maxWidth: 600,
-            marginTop: 24,
-            padding: '14px 18px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 14,
-            fontSize: 12,
-            color: 'rgba(255,255,255,0.3)',
-            fontWeight: 700,
-            lineHeight: 1.8,
-          }}
-        >
-          📌 Price changes take effect immediately for all new bookings.
-          <br />
-          📌 Existing bookings are not affected — they were charged at the price at time of booking.
-          <br />
-          📌 To change the VAT rate, contact Sidnet (requires a code update for KRA compliance).
+                  <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 4 }}>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Entry fee (excl. VAT)</span>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>KES {vat.excl}</span>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>VAT @ 16%</span>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>KES {vat.vat}</span>
+                      <span style={{ fontSize: 14, color: '#fff', fontWeight: 900, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 6, marginTop: 4 }}>
+                        Total
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          color: '#FFD700',
+                          fontWeight: 900,
+                          borderTop: '1px solid rgba(255,255,255,0.08)',
+                          paddingTop: 6,
+                          marginTop: 4,
+                          textAlign: 'right',
+                        }}
+                      >
+                        KES {vat.incl}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
     </>
   )
 }
-

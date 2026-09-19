@@ -29,7 +29,12 @@ type OfflineTicket = {
 }
 
 function todayStr() {
-  return new Date().toISOString().split('T')[0]
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Nairobi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 }
 
 function cacheKey(day: string) {
@@ -404,7 +409,7 @@ export default function VerifyPage() {
                 value={manualRef}
                 onChange={e => setManualRef(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleScan(manualRef)}
-                placeholder="Type or paste QR value"
+                placeholder="QR code or booking ref (LST-…)"
                 style={{
                   flex: 1,
                   background: 'rgba(255,255,255,0.06)',

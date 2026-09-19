@@ -6,7 +6,7 @@ export type StaffRole = 'admin' | 'gate' | 'counter' | 'accounting'
 export function getStaffRole(user: {
   app_metadata?: Record<string, unknown>
   user_metadata?: Record<string, unknown>
-} | null): StaffRole {
+} | null): StaffRole | null {
   const raw =
     user?.app_metadata?.role ??
     user?.user_metadata?.role ??
@@ -15,7 +15,7 @@ export function getStaffRole(user: {
     null
   const v = typeof raw === 'string' ? raw.toLowerCase() : ''
   if (v === 'gate' || v === 'counter' || v === 'accounting' || v === 'admin') return v
-  return 'admin'
+  return null
 }
 
 export function staffLabel(user: { email?: string | null; id: string }): string {
@@ -38,7 +38,7 @@ export async function requireStaff(req: NextRequest, allowed: StaffRole[]): Prom
   }
 
   const role = getStaffRole(user)
-  if (role !== 'admin' && !allowed.includes(role)) {
+  if (!role || (role !== 'admin' && !allowed.includes(role))) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }
 

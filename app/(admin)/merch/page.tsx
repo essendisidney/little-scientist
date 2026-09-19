@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { staffFetch } from '@/lib/staff-fetch'
 
 type Variant = {
   id: string
@@ -54,7 +55,7 @@ export default function MerchPage() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch('/api/merch/products')
+      const res = await staffFetch('/api/merch/products')
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load products')
       setProducts(data.products || [])
@@ -86,7 +87,7 @@ export default function MerchPage() {
     if (!canCreate) return
     setSaving(true)
     try {
-      const res = await fetch('/api/merch/products', {
+      const res = await staffFetch('/api/merch/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,7 +115,7 @@ export default function MerchPage() {
   async function toggleActive(p: Product) {
     setError('')
     try {
-      const res = await fetch(`/api/merch/products/${p.id}`, {
+      const res = await staffFetch(`/api/merch/products/${p.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !p.is_active }),
@@ -130,7 +131,7 @@ export default function MerchPage() {
   async function saveVariant(p: Product, v: Variant, nextPrice: number, nextStock: number) {
     setError('')
     try {
-      const res = await fetch(`/api/merch/products/${p.id}`, {
+      const res = await staffFetch(`/api/merch/products/${p.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ variantId: v.id, priceKes: nextPrice, stockQty: nextStock }),

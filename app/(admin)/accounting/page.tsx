@@ -139,10 +139,16 @@ export default function AccountingPage() {
         ])
         if (revRes.error) throw revRes.error
         if (tbRes.error) throw tbRes.error
-        if (accRes.error) throw accRes.error
+        if (accRes.error) {
+          // Older DBs may lack coa_accounts.active — retry without it.
+          const retry = await supabase.from('coa_accounts').select('code,name,account_type').order('code', { ascending: true })
+          if (retry.error) throw accRes.error
+          setAccounts((retry.data || []).map((a: any) => ({ ...a, active: true })))
+        } else {
+          setAccounts((accRes.data || []) as any)
+        }
         setRevRows(revRes.data || [])
         setTbRows(tbRes.data || [])
-        setAccounts((accRes.data || []) as any)
       } catch (e: any) {
         setError(e?.message || 'Failed to load accounting data.')
       } finally {

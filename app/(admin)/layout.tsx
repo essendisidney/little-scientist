@@ -12,6 +12,7 @@ const NAV = [
   { href: '/admin/invenue', label: 'In-Venue' },
   { href: '/admin/pricing', label: 'Pricing' },
   { href: '/admin/merch', label: 'Merch' },
+  { href: '/admin/documents', label: 'PDFs' },
 ] as const
 
 const ROLE_ALLOW: Record<Role, string[]> = {
@@ -21,7 +22,7 @@ const ROLE_ALLOW: Record<Role, string[]> = {
   accounting: ['/admin/accounting', '/admin/dashboard'],
 }
 
-function getRoleFromSession(session: any): Role {
+function getRoleFromSession(session: any): Role | null {
   const raw =
     session?.user?.app_metadata?.role ??
     session?.user?.user_metadata?.role ??
@@ -30,8 +31,7 @@ function getRoleFromSession(session: any): Role {
     null
   const v = typeof raw === 'string' ? raw.toLowerCase() : ''
   if (v === 'gate' || v === 'counter' || v === 'accounting' || v === 'admin') return v
-  // Backwards-compatible default to avoid locking existing users out.
-  return 'admin'
+  return null
 }
 
 function isAllowed(role: Role, pathname: string) {
@@ -44,15 +44,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const [checking, setChecking] = useState(true)
   const [authed, setAuthed] = useState(false)
-  const [role, setRole] = useState<Role>('admin')
+  const [role, setRole] = useState<Role | null>(null)
   const [userEmail, setUserEmail] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
+        const r = getRoleFromSession(data.session)
+        if (!r) {
+          // No staff role on account — do not default to admin.
+          setAuthed(false)
+          setRole(null)
+          if (pathname !== '/admin/login') router.replace('/admin/login')
+          setChecking(false)
+          return
+        }
         setAuthed(true)
         setUserEmail(data.session.user.email || '')
-        const r = getRoleFromSession(data.session)
         setRole(r)
         if (pathname !== '/admin/login' && !isAllowed(r, pathname)) {
           const firstAllowed =
@@ -92,7 +100,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (pathname === '/admin/login') return <>{children}</>
   if (!authed) return null
 
-  const visibleNav = NAV.filter(n => isAllowed(role, n.href))
+  const visibleNav = role ? NAV.filter(n => isAllowed(role, n.href)) : []
 
   return (
     <div style={{ minHeight: '100vh', background: '#060d1a', fontFamily: 'Nunito, sans-serif' }}>
@@ -135,7 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }}
           title="Access level"
         >
-          {role}
+          {role || '—'}
         </div>
         {userEmail && (
           <div

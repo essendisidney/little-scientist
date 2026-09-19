@@ -1,23 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/admin-auth'
+import { todayInNairobi } from '@/lib/dates'
 
 export async function GET(req: NextRequest) {
   const auth = await requireStaff(req, ['admin', 'gate'])
   if ('error' in auth) return auth.error
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayInNairobi()
 
   const { data, error } = await supabaseAdmin
     .from('tickets')
-    .select('qr_code, is_used, used_at, ticket_type, bookings(booking_ref, booker_name, adult_count, child_count, payment_status, sessions(session_date, time_slot))')
+    .select(
+      'qr_code, is_used, used_at, ticket_type, bookings(booking_ref, booker_name, adult_count, child_count, payment_status, sessions(session_date, time_slot))',
+    )
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const tickets = (data || [])
     .map((t: any) => {
-      const b = t.bookings
-      const s = b?.sessions
+      const b = Array.isArray(t.bookings) ? t.bookings[0] : t.bookings
+      const sRaw = b?.sessions
+      const s = Array.isArray(sRaw) ? sRaw[0] : sRaw
       return {
         qr: t.qr_code,
         isUsed: Boolean(t.is_used),
@@ -32,8 +36,7 @@ export async function GET(req: NextRequest) {
         timeSlot: s?.time_slot || null,
       }
     })
-    .filter(t => t.qr && t.paymentStatus === 'paid' && t.sessionDate === today)
+    .filter((t: { qr?: string; paymentStatus?: string; sessionDate?: string }) => t.qr && t.paymentStatus === 'paid' && t.sessionDate === today)
 
   return NextResponse.json({ today, tickets })
 }
-

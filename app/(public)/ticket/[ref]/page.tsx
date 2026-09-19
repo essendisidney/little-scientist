@@ -130,50 +130,62 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
     let pollIv: ReturnType<typeof setInterval> | undefined
 
     async function loadFromApi() {
-      const res = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(params.ref.toUpperCase())}`)
-      const data = (await res.json().catch(() => null)) as {
-        booking?: Booking
-        tickets?: Ticket[]
-        error?: string
-      } | null
+      try {
+        const ctrl = new AbortController()
+        const timeout = setTimeout(() => ctrl.abort(), 20000)
+        const res = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(String(params.ref).toUpperCase())}`, {
+          signal: ctrl.signal,
+        })
+        clearTimeout(timeout)
+        const data = (await res.json().catch(() => null)) as {
+          booking?: Booking
+          tickets?: Ticket[]
+          error?: string
+        } | null
 
-      if (!alive) return
+        if (!alive) return
 
-      if (!res.ok || !data?.booking) {
-        setError(data?.error || 'Booking not found.')
-        setLoading(false)
-        return
-      }
+        if (!res.ok || !data?.booking) {
+          setError(data?.error || 'Could not load this ticket. Check the link or ask staff to reissue.')
+          setLoading(false)
+          return
+        }
 
-      const b = data.booking
-      if (b.payment_status !== 'paid') {
-        setPendingPayment(true)
-        setBooking(b)
-        setTickets([])
-        setLoading(false)
+        const b = data.booking
+        if (b.payment_status !== 'paid') {
+          setPendingPayment(true)
+          setBooking(b)
+          setTickets([])
+          setLoading(false)
 
-        pollIv = setInterval(async () => {
-          try {
-            const r = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(params.ref.toUpperCase())}`)
-            const d = (await r.json().catch(() => null)) as { booking?: Booking; tickets?: Ticket[] } | null
-            if (!alive || !d?.booking) return
-            if (d.booking.payment_status === 'paid') {
-              if (pollIv) clearInterval(pollIv)
-              setPendingPayment(false)
-              setBooking(d.booking)
-              setTickets((d.tickets || []) as Ticket[])
-              setLoading(false)
+          pollIv = setInterval(async () => {
+            try {
+              const r = await fetch(`/api/bookings/ticket?ref=${encodeURIComponent(String(params.ref).toUpperCase())}`)
+              const d = (await r.json().catch(() => null)) as { booking?: Booking; tickets?: Ticket[] } | null
+              if (!alive || !d?.booking) return
+              if (d.booking.payment_status === 'paid') {
+                if (pollIv) clearInterval(pollIv)
+                setPendingPayment(false)
+                setBooking(d.booking)
+                setTickets((d.tickets || []) as Ticket[])
+                setLoading(false)
+              }
+            } catch {
+              /* keep polling */
             }
-          } catch {
-            /* keep polling */
-          }
-        }, 3000)
-        return
-      }
+          }, 3000)
+          return
+        }
 
-      setBooking(b)
-      setTickets((data.tickets || []) as Ticket[])
-      setLoading(false)
+        setBooking(b)
+        setTickets((data.tickets || []) as Ticket[])
+        setError('')
+        setLoading(false)
+      } catch {
+        if (!alive) return
+        setError('Could not load ticket (network timeout). Pull to refresh or ask staff to mark paid / reissue QR.')
+        setLoading(false)
+      }
     }
 
     loadFromApi()
@@ -408,6 +420,25 @@ export default function TicketPage({ params }: { params: { ref: string } }) {
       <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 18, textAlign: 'center', fontWeight: 400, lineHeight: 1.7, maxWidth: 600, marginLeft: 'auto', marginRight: 'auto' }}>
         Show each QR code to gate staff. Each QR works <strong style={{ color: '#fff' }}>once only</strong>.
       </div>
+
+      {tickets.length === 0 && (
+        <div
+          style={{
+            marginBottom: 18,
+            padding: 16,
+            borderRadius: 14,
+            border: '1px solid rgba(255,217,74,0.35)',
+            background: 'rgba(255,217,74,0.08)',
+            color: '#FFD94A',
+            fontWeight: 700,
+            fontSize: 14,
+            textAlign: 'center',
+            lineHeight: 1.5,
+          }}
+        >
+          Payment is marked paid, but no QR tickets were found yet. Refresh this page, or ask staff to tap <strong>Issue tickets</strong> on the booking in Admin → Bookings.
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 18 }}>
         {tickets.map(ticket => {

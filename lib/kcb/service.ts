@@ -11,7 +11,7 @@ import { logKcbApiCall, newInternalReference, sanitizePayload } from '@/lib/kcb/
 import type { AppMpesaInitiateInput, KcbPaymentStatus, ParsedKcbCallback } from '@/lib/kcb/types'
 import { postTicketPayment, postInVenuePurchase, postMerchPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
-import { confirmSessionBooking, bookingHeadcount } from '@/lib/session-pending'
+import { ensureTicketsIssued } from '@/lib/tickets'
 
 type PaymentRow = {
   id: string
@@ -228,27 +228,30 @@ export async function processKcbCallback(rawBody: unknown) {
     .eq('payment_request_id', payment.id)
     .eq('external_reference', externalRef)
 
-  if (parsed.success && payment.source_type === 'booking' && payment.source_id && parsed.mpesaReceiptNumber) {
+  if (parsed.success && payment.source_type === 'booking' && payment.source_id) {
+    const receipt = parsed.mpesaReceiptNumber || parsed.checkoutRequestId
     await settleBookingFromKcb({
       bookingId: payment.source_id,
       amount: Number(payment.amount),
-      mpesaReceipt: parsed.mpesaReceiptNumber,
+      mpesaReceipt: receipt,
       checkoutRequestId: parsed.checkoutRequestId,
       rawBody,
     })
-  } else if (parsed.success && payment.source_type === 'in_venue_purchase' && payment.source_id && parsed.mpesaReceiptNumber) {
+  } else if (parsed.success && payment.source_type === 'in_venue_purchase' && payment.source_id) {
+    const receipt = parsed.mpesaReceiptNumber || parsed.checkoutRequestId
     await settleInVenueFromKcb({
       purchaseId: payment.source_id,
       amount: Number(payment.amount),
-      mpesaReceipt: parsed.mpesaReceiptNumber,
+      mpesaReceipt: receipt,
       checkoutRequestId: parsed.checkoutRequestId,
       rawBody,
     })
-  } else if (parsed.success && payment.source_type === 'merch_order' && payment.source_id && parsed.mpesaReceiptNumber) {
+  } else if (parsed.success && payment.source_type === 'merch_order' && payment.source_id) {
+    const receipt = parsed.mpesaReceiptNumber || parsed.checkoutRequestId
     await settleMerchFromKcb({
       orderId: payment.source_id,
       amount: Number(payment.amount),
-      mpesaReceipt: parsed.mpesaReceiptNumber,
+      mpesaReceipt: receipt,
       checkoutRequestId: parsed.checkoutRequestId,
       rawBody,
     })
@@ -371,7 +374,12 @@ async function settleBookingFromKcb(p: {
 }) {
   const { data: booking } = await supabaseAdmin.from('bookings').select('*').eq('id', p.bookingId).maybeSingle()
   if (!booking) return
-  if (booking.payment_status === 'paid') return
+
+  // Already paid: still ensure tickets exist (recovery for paid-with-zero-tickets).
+  if (booking.payment_status === 'paid') {
+    await ensureTicketsIssued(booking)
+    return
+  }
 
   const { data: existingPayment } = await supabaseAdmin
     .from('payments')
@@ -409,32 +417,15 @@ async function settleBookingFromKcb(p: {
       .eq('id', paymentId)
   }
 
+  // Issue tickets before marking paid so a failed insert does not leave paid+empty.
+  const ticketResult = await ensureTicketsIssued(booking)
+
   await supabaseAdmin
     .from('bookings')
     .update({ payment_status: 'paid', payment_method: 'mpesa', updated_at: new Date().toISOString() })
     .eq('id', booking.id)
 
-  const { count } = await supabaseAdmin
-    .from('tickets')
-    .select('id', { count: 'exact', head: true })
-    .eq('booking_id', booking.id)
-
-  if (!count) {
-    const tickets = []
-    for (let i = 0; i < (booking.adult_count as number); i++) tickets.push({ booking_id: booking.id, ticket_type: 'Adult' })
-    for (let i = 0; i < (booking.child_count as number); i++) tickets.push({ booking_id: booking.id, ticket_type: 'Child' })
-    const infantCount = Number(booking.infant_count || 0) || 0
-    const bookingKind = String(booking.booking_kind || 'general')
-    if (bookingKind === 'birthday' && infantCount > 0) {
-      for (let i = 0; i < infantCount; i++) tickets.push({ booking_id: booking.id, ticket_type: 'Child under 95cm' })
-    }
-    if (tickets.length) await supabaseAdmin.from('tickets').insert(tickets)
-
-    const addCount = bookingHeadcount(booking)
-    await confirmSessionBooking(String(booking.session_id), addCount)
-  }
-
-  if (paymentId) {
+  if (paymentId && ticketResult.issued > 0) {
     await supabaseAdmin.from('etr_receipts').insert({
       booking_id: booking.id,
       payment_id: paymentId,
@@ -443,24 +434,44 @@ async function settleBookingFromKcb(p: {
       source_type: 'booking',
       source_id: booking.id,
     })
+
+    await postTicketPayment({
+      bookingId: booking.id as string,
+      ticketAmountKes: booking.total_amount_kes as number,
+      platformFeeKes: 0,
+      mpesaReceipt: p.mpesaReceipt,
+      bookingKind: String(booking.booking_kind || 'general'),
+    })
+
+    void notifyBookingPaid(booking.id as string, p.mpesaReceipt)
+  } else if (paymentId && ticketResult.alreadyHad > 0) {
+    // Re-settling after partial prior run — skip duplicate GL / email.
+  } else if (paymentId) {
+    await postTicketPayment({
+      bookingId: booking.id as string,
+      ticketAmountKes: booking.total_amount_kes as number,
+      platformFeeKes: 0,
+      mpesaReceipt: p.mpesaReceipt,
+      bookingKind: String(booking.booking_kind || 'general'),
+    })
+    void notifyBookingPaid(booking.id as string, p.mpesaReceipt)
   }
-
-  await postTicketPayment({
-    bookingId: booking.id as string,
-    ticketAmountKes: booking.total_amount_kes as number,
-    platformFeeKes: 0,
-    mpesaReceipt: p.mpesaReceipt,
-    bookingKind: String(booking.booking_kind || 'general'),
-  })
-
-  await notifyBookingPaid(booking.id as string, p.mpesaReceipt)
 }
 
-/** If KCB already SUCCESS but booking still pending (missed IPN), settle now. */
+/** If KCB already SUCCESS but booking still pending (missed IPN), settle now. Also recovers paid+0 tickets. */
 export async function reconcileBookingFromKcb(bookingId: string) {
   const { data: booking } = await supabaseAdmin.from('bookings').select('*').eq('id', bookingId).maybeSingle()
   if (!booking) return { ok: false as const, reason: 'not_found' as const }
-  if (booking.payment_status === 'paid') return { ok: true as const, status: 'paid' as const, already: true as const }
+
+  if (booking.payment_status === 'paid') {
+    const issued = await ensureTicketsIssued(booking)
+    return {
+      ok: true as const,
+      status: 'paid' as const,
+      already: true as const,
+      ticketsIssued: issued.issued,
+    }
+  }
 
   const { data: kcbPay } = await supabaseAdmin
     .from('kcb_payment_requests')
@@ -483,6 +494,42 @@ export async function reconcileBookingFromKcb(bookingId: string) {
 
   await settleBookingFromKcb({
     bookingId,
+    amount: Number(kcbPay.amount),
+    mpesaReceipt: String(receipt),
+    checkoutRequestId: String(kcbPay.kcb_reference),
+    rawBody: kcbPay.response_payload || {},
+  })
+
+  return { ok: true as const, status: 'paid' as const, already: false as const }
+}
+
+/** If KCB SUCCESS but in-venue purchase still pending (missed IPN), settle now. */
+export async function reconcileInVenueFromKcb(purchaseId: string) {
+  const { data: purchase } = await supabaseAdmin.from('in_venue_purchases').select('*').eq('id', purchaseId).maybeSingle()
+  if (!purchase) return { ok: false as const, reason: 'not_found' as const }
+  if (purchase.payment_status === 'paid') return { ok: true as const, status: 'paid' as const, already: true as const }
+
+  const { data: kcbPay } = await supabaseAdmin
+    .from('kcb_payment_requests')
+    .select('*')
+    .eq('source_type', 'in_venue_purchase')
+    .eq('source_id', purchaseId)
+    .eq('status', 'SUCCESS')
+    .order('completed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!kcbPay?.kcb_reference) {
+    return { ok: false as const, reason: 'no_success_payment' as const, status: purchase.payment_status as string }
+  }
+
+  const receipt =
+    (kcbPay.response_payload as { Body?: { stkCallback?: { CallbackMetadata?: { Item?: { Name: string; Value?: string }[] } } } } | null)
+      ?.Body?.stkCallback?.CallbackMetadata?.Item?.find((i) => i.Name === 'MpesaReceiptNumber')?.Value ||
+    kcbPay.kcb_reference
+
+  await settleInVenueFromKcb({
+    purchaseId,
     amount: Number(kcbPay.amount),
     mpesaReceipt: String(receipt),
     checkoutRequestId: String(kcbPay.kcb_reference),

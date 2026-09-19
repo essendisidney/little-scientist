@@ -4,12 +4,20 @@ export const maxDuration = 60
 import { createAndSendKcbPayment } from '@/lib/kcb/service'
 import { toPublicError } from '@/lib/kcb/errors'
 import { isKcbConfigured } from '@/lib/kcb/config'
+import { requireStaff } from '@/lib/admin-auth'
+import { rateLimit } from '@/lib/rate-limit'
 
 /**
- * POST /api/kcb/mpesa/initiate
- * Body: { amount, phoneNumber, reference, description?, idempotencyKey?, sourceType?, sourceId? }
+ * POST /api/kcb/mpesa/initiate — staff-only diagnostic / ops STK.
+ * Guest checkout uses /api/mpesa/initiate instead.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireStaff(req, ['admin'])
+  if ('error' in auth) return auth.error
+
+  const limited = rateLimit(req, 'kcb-initiate', { limit: 10, windowMs: 60_000 })
+  if (limited) return limited
+
   try {
     if (!isKcbConfigured()) {
       return NextResponse.json({ error: 'KCB payment gateway is not configured' }, { status: 503 })

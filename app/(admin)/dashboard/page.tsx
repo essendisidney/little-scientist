@@ -162,6 +162,8 @@ export default function DashboardPage() {
   const [dateLoading, setDateLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [actionMsg, setActionMsg] = useState('')
+  const [busyRef, setBusyRef] = useState<string | null>(null)
   const [blockingId, setBlockingId] = useState<string | null>(null)
   const [birthdayEnquiries, setBirthdayEnquiries] = useState<
     {
@@ -281,6 +283,42 @@ export default function DashboardPage() {
     if (tab !== 'enquiries') return
     void loadEnquiries()
   }, [tab])
+
+  async function adminBookingAction(bookingRef: string, action: 'mark_paid' | 'reissue_tickets') {
+    setBusyRef(bookingRef)
+    setActionMsg('')
+    setActionError('')
+    try {
+      const res = await staffFetch('/api/admin/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, bookingRef }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Action failed')
+      setActionMsg(
+        action === 'mark_paid'
+          ? `Marked ${bookingRef} paid · ${data.ticketsIssued ?? 0} ticket(s) issued`
+          : `Tickets for ${bookingRef}: ${data.ticketsIssued ?? 0} new / ${data.alreadyHad ?? 0} existing`,
+      )
+      const sRes = await supabase.from('sessions').select('id').eq('session_date', selectedDate)
+      const sessionIds = ((sRes.data || []) as { id: string }[]).map((s) => s.id)
+      if (sessionIds.length) {
+        const dayRes = await supabase
+          .from('bookings')
+          .select(
+            'booking_ref, booker_name, booker_phone, adult_count, child_count, total_amount_kes, payment_status, session_id, sessions(time_slot, session_date)',
+          )
+          .in('session_id', sessionIds)
+          .order('created_at', { ascending: false })
+        setDayBookings((dayRes.data || []) as typeof dayBookings)
+      }
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Action failed')
+    } finally {
+      setBusyRef(null)
+    }
+  }
 
   function filterByStatus<T extends { status: string }>(items: T[]) {
     if (enquiryFilter === 'all') return items
@@ -599,6 +637,9 @@ export default function DashboardPage() {
                 {actionError && (
                   <div style={{ fontSize: 12, color: '#f87171', marginTop: 8, fontWeight: 700 }}>{actionError}</div>
                 )}
+                {actionMsg && (
+                  <div style={{ fontSize: 12, color: '#4ade80', marginTop: 8, fontWeight: 700 }}>{actionMsg}</div>
+                )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                 <button
@@ -796,7 +837,7 @@ export default function DashboardPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                        {['Ref', 'Name', 'Phone', 'Slot', 'Visitors', 'Amount', 'Status'].map(h => (
+                        {['Ref', 'Name', 'Phone', 'Slot', 'Visitors', 'Amount', 'Status', 'Admin'].map(h => (
                           <th
                             key={h}
                             style={{
@@ -862,6 +903,44 @@ export default function DashboardPage() {
                                 </span>
                               )
                             })()}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                              {b.payment_status !== 'paid' && (
+                                <button
+                                  type="button"
+                                  disabled={busyRef === b.booking_ref}
+                                  onClick={() => adminBookingAction(b.booking_ref, 'mark_paid')}
+                                  style={{
+                                    ...navBtnStyle,
+                                    padding: '4px 8px',
+                                    fontSize: 11,
+                                    color: '#4ade80',
+                                    opacity: busyRef === b.booking_ref ? 0.5 : 1,
+                                  }}
+                                  title="Mark paid and issue QR tickets"
+                                >
+                                  Mark paid
+                                </button>
+                              )}
+                              {b.payment_status === 'paid' && (
+                                <button
+                                  type="button"
+                                  disabled={busyRef === b.booking_ref}
+                                  onClick={() => adminBookingAction(b.booking_ref, 'reissue_tickets')}
+                                  style={{
+                                    ...navBtnStyle,
+                                    padding: '4px 8px',
+                                    fontSize: 11,
+                                    color: '#38bdf8',
+                                    opacity: busyRef === b.booking_ref ? 0.5 : 1,
+                                  }}
+                                  title="Issue missing tickets if none exist"
+                                >
+                                  Issue tickets
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

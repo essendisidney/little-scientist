@@ -107,6 +107,11 @@ export default function BookPage() {
   const [visitType, setVisitTypeState] = useState<VisitType>('general')
   const [step, setStep] = useState<Step>('date')
   const [pricing, setPricing] = useState<Pricing>(DEFAULT_PRICING)
+  const [birthdayPricing, setBirthdayPricing] = useState<Pricing>({
+    adult18PlusKes: BIRTHDAY_PRICING.adult18PlusKes,
+    child95cmTo17Kes: BIRTHDAY_PRICING.child95cmTo17Kes,
+    childUnder95cmKes: BIRTHDAY_PRICING.childUnder95cmKes,
+  })
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -210,6 +215,14 @@ export default function BookPage() {
           adult18PlusKes: typeof adult === 'number' ? adult : DEFAULT_PRICING.adult18PlusKes,
           child95cmTo17Kes: typeof child === 'number' ? child : DEFAULT_PRICING.child95cmTo17Kes,
           childUnder95cmKes: typeof infant === 'number' ? infant : DEFAULT_PRICING.childUnder95cmKes,
+        })
+        const bAdult = tiers.find(t => t.key === 'birthday_adult')?.price_kes ?? adult
+        const bChild = tiers.find(t => t.key === 'birthday_child')?.price_kes ?? child
+        const bInfant = tiers.find(t => t.key === 'birthday_infant')?.price_kes ?? infant
+        setBirthdayPricing({
+          adult18PlusKes: typeof bAdult === 'number' ? bAdult : BIRTHDAY_PRICING.adult18PlusKes,
+          child95cmTo17Kes: typeof bChild === 'number' ? bChild : BIRTHDAY_PRICING.child95cmTo17Kes,
+          childUnder95cmKes: typeof bInfant === 'number' ? bInfant : BIRTHDAY_PRICING.childUnder95cmKes,
         })
       } catch {}
     })()
@@ -432,14 +445,7 @@ export default function BookPage() {
     await handlePayment()
   }
 
-  const activePricing: Pricing =
-    visitType === 'birthday'
-      ? {
-          adult18PlusKes: BIRTHDAY_PRICING.adult18PlusKes,
-          child95cmTo17Kes: BIRTHDAY_PRICING.child95cmTo17Kes,
-          childUnder95cmKes: BIRTHDAY_PRICING.childUnder95cmKes,
-        }
-      : pricing
+  const activePricing: Pricing = visitType === 'birthday' ? birthdayPricing : pricing
 
   const total =
     adults * activePricing.adult18PlusKes +

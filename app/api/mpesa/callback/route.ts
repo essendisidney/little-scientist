@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { parseMpesaCallback } from '@/lib/mpesa'
 import { postTicketPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
-import { confirmSessionBooking, bookingHeadcount } from '@/lib/session-pending'
+import { ensureTicketsIssued } from '@/lib/tickets'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,8 +21,21 @@ export async function POST(req: NextRequest) {
 
     if (!payment) return NextResponse.json({ ok: true })
 
+    const booking = payment.bookings as Record<string, unknown>
+
     if (success && mpesaReceiptNumber) {
-      const booking = payment.bookings as Record<string, unknown>
+      // Idempotent: already paid → ensure tickets only, skip double GL/capacity.
+      if (booking.payment_status === 'paid') {
+        await ensureTicketsIssued({
+          id: String(booking.id),
+          adult_count: booking.adult_count as number,
+          child_count: booking.child_count as number,
+          infant_count: (booking as { infant_count?: number }).infant_count,
+          booking_kind: (booking as { booking_kind?: string }).booking_kind,
+          session_id: booking.session_id as string,
+        })
+        return NextResponse.json({ ok: true })
+      }
 
       await supabaseAdmin
         .from('payments')
@@ -34,6 +47,15 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', payment.id)
 
+      await ensureTicketsIssued({
+        id: String(booking.id),
+        adult_count: booking.adult_count as number,
+        child_count: booking.child_count as number,
+        infant_count: (booking as { infant_count?: number }).infant_count,
+        booking_kind: (booking as { booking_kind?: string }).booking_kind,
+        session_id: booking.session_id as string,
+      })
+
       await supabaseAdmin
         .from('bookings')
         .update({
@@ -41,26 +63,6 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', booking.id)
-
-      const tickets = []
-      for (let i = 0; i < (booking.adult_count as number); i++) {
-        tickets.push({ booking_id: booking.id, ticket_type: 'Adult' })
-      }
-      for (let i = 0; i < (booking.child_count as number); i++) {
-        tickets.push({ booking_id: booking.id, ticket_type: 'Child' })
-      }
-      const infantCount = Number((booking as { infant_count?: number }).infant_count || 0) || 0
-      const bookingKind = String((booking as { booking_kind?: string }).booking_kind || 'general')
-      // Birthday under-95cm tickets are paid — issue QR. General visits: free infants, no QR.
-      if (bookingKind === 'birthday' && infantCount > 0) {
-        for (let i = 0; i < infantCount; i++) {
-          tickets.push({ booking_id: booking.id, ticket_type: 'Child under 95cm' })
-        }
-      }
-      await supabaseAdmin.from('tickets').insert(tickets)
-
-      const addCount = bookingHeadcount(booking as { adult_count?: number; child_count?: number; infant_count?: number })
-      await confirmSessionBooking(String(booking.session_id), addCount)
 
       await supabaseAdmin.from('etr_receipts').insert({
         booking_id: booking.id,
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest) {
         source_id: booking.id,
       })
 
+      const bookingKind = String((booking as { booking_kind?: string }).booking_kind || 'general')
       await postTicketPayment({
         bookingId: booking.id as string,
         ticketAmountKes: booking.total_amount_kes as number,
@@ -101,7 +104,11 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', payment.id)
 
-      await supabaseAdmin.from('bookings').update({ payment_status: 'failed' }).eq('id', payment.booking_id)
+      await supabaseAdmin
+        .from('bookings')
+        .update({ payment_status: 'failed' })
+        .eq('id', payment.booking_id)
+        .eq('payment_status', 'pending')
     }
 
     return NextResponse.json({ ok: true })

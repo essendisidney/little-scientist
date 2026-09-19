@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { requireStaffOrCron } from '@/lib/admin-auth'
 
 const HOURLY_SLOTS = [
   '09:00-11:00',
@@ -34,11 +35,11 @@ async function ensureOneDate(sessionDate: string) {
   if (existingErr) throw new Error('Failed to check sessions.')
 
   const rows = (existing || []) as SessionRow[]
-  const existingSlots = new Set(rows.map(r => String(r.time_slot)))
-  const missingSlots = HOURLY_SLOTS.filter(s => !existingSlots.has(s))
+  const existingSlots = new Set(rows.map((r) => String(r.time_slot)))
+  const missingSlots = HOURLY_SLOTS.filter((s) => !existingSlots.has(s))
 
   if (missingSlots.length > 0) {
-    const toInsert = missingSlots.map(slot => ({
+    const toInsert = missingSlots.map((slot) => ({
       id: crypto.randomUUID(),
       session_date: sessionDate,
       time_slot: slot,
@@ -56,6 +57,18 @@ async function ensureOneDate(sessionDate: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Public booking UI seeds slots; allow unauthenticated only when creating today's/near dates
+  // is too open. Prefer staff/cron; also allow if body includes only dates within next 14 days
+  // AND no capacity mutations — seeding empty slots is low risk but was abused open.
+  // Keep staff/cron for mutations; for guest book flow use a limited public path below.
+  const authHeader = req.headers.get('authorization')
+  if (authHeader) {
+    const auth = await requireStaffOrCron(req, ['admin', 'counter', 'accounting'])
+    if ('error' in auth) return auth.error
+  } else {
+    // Guest book page: allow seed only (no secret ops). Rate-limit via short-circuit size.
+  }
+
   try {
     const body = await req.json().catch(() => ({}))
     const sessionDate = body?.sessionDate
@@ -63,7 +76,20 @@ export async function POST(req: NextRequest) {
 
     if (sessionDates && sessionDates.length > 0) {
       const unique = [...new Set(sessionDates as string[])].slice(0, 14)
-      const results = await Promise.all(unique.map(d => ensureOneDate(d)))
+      // Without auth, only allow seeding dates within the next 14 calendar days.
+      if (!authHeader) {
+        const today = new Date()
+        const max = new Date(today)
+        max.setDate(max.getDate() + 14)
+        const minKey = today.toISOString().slice(0, 10)
+        const maxKey = max.toISOString().slice(0, 10)
+        for (const d of unique) {
+          if (d < minKey || d > maxKey) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+          }
+        }
+      }
+      const results = await Promise.all(unique.map((d) => ensureOneDate(d)))
       const byDate: Record<string, SessionRow[]> = {}
       let created = 0
       unique.forEach((d, i) => {
@@ -75,6 +101,17 @@ export async function POST(req: NextRequest) {
 
     if (!isDateKey(sessionDate)) {
       return NextResponse.json({ error: 'Invalid date.' }, { status: 400 })
+    }
+
+    if (!authHeader) {
+      const today = new Date()
+      const max = new Date(today)
+      max.setDate(max.getDate() + 14)
+      const minKey = today.toISOString().slice(0, 10)
+      const maxKey = max.toISOString().slice(0, 10)
+      if (sessionDate < minKey || sessionDate > maxKey) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
     }
 
     const result = await ensureOneDate(sessionDate)

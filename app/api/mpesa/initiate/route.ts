@@ -90,20 +90,21 @@ export async function POST(req: NextRequest) {
     let childPrice = DEFAULT_CHILD_PRICE
     let infantPrice = DEFAULT_INFANT_PRICE
 
-    if (bookingKind === 'birthday') {
-      adultPrice = BIRTHDAY_PRICING.adult18PlusKes
-      childPrice = BIRTHDAY_PRICING.child95cmTo17Kes
-      infantPrice = BIRTHDAY_PRICING.childUnder95cmKes
-    } else {
-      const { data: tiers } = await supabaseAdmin
-        .from('pricing_tiers')
-        .select('key, price_kes, active')
-        .eq('active', true)
-        .in('key', ['adult', 'child', 'infant'])
+    const { data: tiers } = await supabaseAdmin
+      .from('pricing_tiers')
+      .select('key, price_kes, active')
+      .eq('active', true)
 
-      adultPrice = (tiers || []).find((t: any) => t.key === 'adult')?.price_kes ?? DEFAULT_ADULT_PRICE
-      childPrice = (tiers || []).find((t: any) => t.key === 'child')?.price_kes ?? DEFAULT_CHILD_PRICE
-      infantPrice = (tiers || []).find((t: any) => t.key === 'infant')?.price_kes ?? DEFAULT_INFANT_PRICE
+    const byKey = (k: string) => (tiers || []).find((t: { key: string; price_kes: number }) => t.key === k)?.price_kes
+
+    if (bookingKind === 'birthday') {
+      adultPrice = byKey('birthday_adult') ?? byKey('adult') ?? BIRTHDAY_PRICING.adult18PlusKes
+      childPrice = byKey('birthday_child') ?? byKey('child') ?? BIRTHDAY_PRICING.child95cmTo17Kes
+      infantPrice = byKey('birthday_infant') ?? byKey('infant') ?? BIRTHDAY_PRICING.childUnder95cmKes
+    } else {
+      adultPrice = byKey('adult') ?? DEFAULT_ADULT_PRICE
+      childPrice = byKey('child') ?? DEFAULT_CHILD_PRICE
+      infantPrice = byKey('infant') ?? DEFAULT_INFANT_PRICE
     }
 
     const total =

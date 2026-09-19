@@ -19,8 +19,8 @@ type Booking = {
   sessions: { session_date: string; time_slot: string }
   in_venue_purchases: Purchase[]
 }
-type Step = 'lookup' | 'booking' | 'add' | 'pending' | 'success'
-type LookupMode = 'scan' | 'manual'
+type Step = 'lookup' | 'booking' | 'add' | 'pending' | 'success' | 'walkup'
+type LookupMode = 'scan' | 'manual' | 'walkup'
 
 const CATS = [
   { value: 'merchandise', label: '🛍️ Merchandise' },
@@ -42,6 +42,8 @@ export default function InVenuePage() {
   const [error, setError] = useState('')
   const [pendingRef, setPendingRef] = useState('')
   const [pendingTotal, setPendingTotal] = useState(0)
+  const [walkUpPhone, setWalkUpPhone] = useState('')
+  const [walkUpName, setWalkUpName] = useState('')
   const [scannerReady, setScannerReady] = useState(false)
   const [scannerError, setScannerError] = useState('')
   const [scannerActive, setScannerActive] = useState(false)
@@ -127,10 +129,15 @@ export default function InVenuePage() {
     setStep('booking')
   }
 
-  async function submitPurchase() {
+  async function submitPurchase(opts?: { walkUp?: boolean }) {
     setError('')
     if (!description || !unitPrice) {
       setError('Fill in all fields')
+      return
+    }
+    const isWalkUp = Boolean(opts?.walkUp || lookupMode === 'walkup' || !booking)
+    if (isWalkUp && !walkUpPhone.trim()) {
+      setError('Enter the customer M-Pesa number for walk-up STK')
       return
     }
     setLoading(true)
@@ -143,7 +150,9 @@ export default function InVenuePage() {
         description,
         quantity,
         unitPriceKes: parseFloat(unitPrice),
-        staffId: 'counter',
+        walkUp: isWalkUp,
+        phone: isWalkUp ? walkUpPhone : undefined,
+        customerName: isWalkUp ? walkUpName : undefined,
       }),
     })
     const data = await res.json()
@@ -157,18 +166,24 @@ export default function InVenuePage() {
     setStep('pending')
 
     const poll = setInterval(async () => {
-      const r = await staffFetch(`/api/invenue/initiate?ref=${booking?.booking_ref}`)
+      const r = await staffFetch(
+        isWalkUp
+          ? `/api/invenue/initiate?purchaseId=${encodeURIComponent(data.purchaseId)}`
+          : `/api/invenue/initiate?ref=${encodeURIComponent(booking?.booking_ref || '')}`,
+      )
       const d = await r.json()
-      const p = d.booking?.in_venue_purchases?.find((x: Purchase) => x.purchase_ref === data.purchaseRef)
+      const p = isWalkUp
+        ? d.purchase
+        : d.booking?.in_venue_purchases?.find((x: Purchase) => x.purchase_ref === data.purchaseRef)
       if (p?.payment_status === 'paid') {
         clearInterval(poll)
         setStep('success')
-        setBooking(d.booking)
+        if (!isWalkUp && d.booking) setBooking(d.booking)
       }
       if (p?.payment_status === 'failed') {
         clearInterval(poll)
         setError('Payment failed')
-        setStep('add')
+        setStep(isWalkUp ? 'add' : 'add')
       }
     }, 3000)
     setTimeout(() => clearInterval(poll), 180000)
@@ -267,18 +282,28 @@ export default function InVenuePage() {
               🛍️ In-Venue Sales
             </div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>
-              Scan visitor QR or enter booking reference
+              Scan ticket QR, type booking ref / M-Pesa receipt, or walk-up sale (no ticket needed)
             </div>
           </div>
 
           {step === 'lookup' && (
             <>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' as const }}>
                 <button className={`mode-btn ${lookupMode === 'scan' ? 'on' : 'off'}`} onClick={() => setLookupMode('scan')}>
-                  📷 Scan QR Code
+                  📷 Scan QR
                 </button>
                 <button className={`mode-btn ${lookupMode === 'manual' ? 'on' : 'off'}`} onClick={() => setLookupMode('manual')}>
                   ⌨️ Type Ref
+                </button>
+                <button
+                  className={`mode-btn ${lookupMode === 'walkup' ? 'on' : 'off'}`}
+                  onClick={() => {
+                    setLookupMode('walkup')
+                    setBooking(null)
+                    setStep('add')
+                  }}
+                >
+                  🚶 Walk-up
                 </button>
               </div>
 
@@ -401,14 +426,14 @@ export default function InVenuePage() {
               {lookupMode === 'manual' && (
                 <div>
                   <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 14, fontWeight: 700 }}>
-                    Enter the booking reference from the visitor&apos;s ticket
+                    Booking ref (LST-…), ticket QR, or M-Pesa receipt
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <input
                       value={ref}
                       onChange={e => setRef(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && lookupBooking(ref)}
-                      placeholder="e.g. A1B2C3D4"
+                      placeholder="LST-… or M-Pesa receipt"
                       style={{
                         ...S,
                         marginBottom: 0,
@@ -428,6 +453,27 @@ export default function InVenuePage() {
                     </button>
                   </div>
                   {error && <div style={{ color: '#FF6B9D', marginTop: 10, fontSize: 14, fontWeight: 700 }}>⚠️ {error}</div>}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLookupMode('walkup')
+                      setBooking(null)
+                      setStep('add')
+                    }}
+                    style={{
+                      marginTop: 16,
+                      width: '100%',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px dashed rgba(255,217,74,0.35)',
+                      borderRadius: 12,
+                      padding: '12px 14px',
+                      color: '#FFD94A',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    No ticket? Continue as walk-up sale →
+                  </button>
                 </div>
               )}
             </>
@@ -513,10 +559,16 @@ export default function InVenuePage() {
             </>
           )}
 
-          {step === 'add' && booking && (
+          {step === 'add' && (booking || lookupMode === 'walkup') && (
             <>
               <button
-                onClick={() => setStep('booking')}
+                onClick={() => {
+                  if (booking) setStep('booking')
+                  else {
+                    setLookupMode('manual')
+                    setStep('lookup')
+                  }
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -532,13 +584,36 @@ export default function InVenuePage() {
                   gap: 6,
                 }}
               >
-                ← Back to {booking.booker_name || 'visitor'}
+                ← Back
               </button>
 
-              <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: 24, marginBottom: 6 }}>Add purchase</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24, fontWeight: 700 }}>
-                Charging to {booking.booker_phone} · {booking.booking_ref}
+              <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: 24, marginBottom: 6 }}>
+                {booking ? 'Add purchase' : 'Walk-up sale'}
               </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24, fontWeight: 700 }}>
+                {booking
+                  ? `Charging to ${booking.booker_phone} · ${booking.booking_ref}`
+                  : 'No ticket needed — STK goes to the phone you enter (e.g. rider / walk-in).'}
+              </div>
+
+              {!booking && (
+                <>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Customer name (optional)
+                  </div>
+                  <input style={S} placeholder="Name" value={walkUpName} onChange={e => setWalkUpName(e.target.value)} />
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    M-Pesa phone *
+                  </div>
+                  <input
+                    style={S}
+                    placeholder="07… / 01… / 254…"
+                    value={walkUpPhone}
+                    onChange={e => setWalkUpPhone(e.target.value)}
+                    inputMode="tel"
+                  />
+                </>
+              )}
 
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: 800, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Category
@@ -635,12 +710,16 @@ export default function InVenuePage() {
                 </div>
               )}
 
-              <button style={{ ...BTN, opacity: loading ? 0.7 : 1 }} onClick={submitPurchase} disabled={loading}>
+              <button
+                style={{ ...BTN, opacity: loading ? 0.7 : 1 }}
+                onClick={() => void submitPurchase()}
+                disabled={loading}
+              >
                 {loading ? '🔄 Sending M-Pesa prompt...' : `💳 Charge KES ${total > 0 ? total.toLocaleString() : '—'} →`}
               </button>
 
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)', textAlign: 'center', marginTop: 10, fontWeight: 700 }}>
-                M-Pesa prompt goes to {booking.booker_phone}
+                M-Pesa prompt goes to {booking?.booker_phone || walkUpPhone || 'the phone entered above'}
               </div>
             </>
           )}
