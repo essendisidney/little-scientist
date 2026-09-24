@@ -79,10 +79,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // General visits: email is optional — QR is shown on /ticket/{ref} after payment.
     if (bookingKind === 'general') {
       const email = String((partyMeta as { email?: string } | null)?.email || body?.email || '').trim()
-      if (!email || !email.includes('@')) {
-        return NextResponse.json({ error: 'Enter a valid email — we send your ticket link there.' }, { status: 400 })
+      if (email && !email.includes('@')) {
+        return NextResponse.json({ error: 'Enter a valid email, or leave it blank.' }, { status: 400 })
       }
     }
 

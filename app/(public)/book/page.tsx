@@ -561,12 +561,10 @@ export default function BookPage() {
         }
       }
 
-      if (visitType === 'general') {
-        if (!bookerEmail.trim() || !bookerEmail.includes('@')) {
-          setError('Enter a valid email — we send your ticket link there.')
-          setLoading(false)
-          return
-        }
+      if (visitType === 'general' && bookerEmail.trim() && !bookerEmail.includes('@')) {
+        setError('Enter a valid email, or leave it blank — your QR opens on this phone after payment.')
+        setLoading(false)
+        return
       }
 
       const bookerName =
@@ -590,7 +588,9 @@ export default function BookPage() {
                 notes: partyNotes || null,
                 sessionMode: 'shared',
               }
-            : { email: bookerEmail.trim() }
+            : bookerEmail.trim()
+              ? { email: bookerEmail.trim() }
+              : null
 
       const res = await fetch('/api/mpesa/initiate', {
         method: 'POST',
@@ -1736,12 +1736,15 @@ export default function BookPage() {
                         />
                         <input
                           className="inp"
-                          placeholder="Email for tickets *"
+                          placeholder="Email for ticket copy (optional)"
                           value={bookerEmail}
                           onChange={e => setBookerEmail(e.target.value)}
                           type="email"
                           autoComplete="email"
                         />
+                        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, lineHeight: 1.45 }}>
+                          No email needed — after M-Pesa confirms, your QR opens on this screen. Save the booking link or screenshot it.
+                        </p>
                         <input
                           className="inp"
                           placeholder="M-Pesa number e.g. 0700 101 425"
@@ -1916,14 +1919,19 @@ export default function BookPage() {
                   />
                 )}
                 {visitType === 'general' && (
-                  <input
-                    className="inp"
-                    placeholder="Email for tickets (optional)"
-                    value={bookerEmail}
-                    onChange={e => setBookerEmail(e.target.value)}
-                    type="email"
-                    autoComplete="email"
-                  />
+                  <>
+                    <input
+                      className="inp"
+                      placeholder="Email for ticket copy (optional)"
+                      value={bookerEmail}
+                      onChange={e => setBookerEmail(e.target.value)}
+                      type="email"
+                      autoComplete="email"
+                    />
+                    <p style={{ margin: '0 0 10px', fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, lineHeight: 1.45 }}>
+                      No email needed — QR opens here after payment. Staff can also open the ticket from Admin with your booking ref.
+                    </p>
+                  </>
                 )}
                 <input
                   className="inp"
