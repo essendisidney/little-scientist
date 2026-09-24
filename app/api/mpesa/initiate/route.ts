@@ -21,6 +21,11 @@ const MIN_DAYS = 0
 const MAX_DAYS = 12
 
 export async function POST(req: NextRequest) {
+  let holdSessionId: string | null = null
+  let holdCount = 0
+  let holdBookingId: string | null = null
+  let stkSent = false
+
   try {
     const limited = rateLimit(req, 'mpesa-initiate', { limit: 12, windowMs: 60_000 })
     if (limited) return limited
@@ -162,10 +167,14 @@ export async function POST(req: NextRequest) {
       }
 
       if (status === 'expired') {
-        const reserved = await reserveSessionPending(sessionId, partyHeadcount(party))
+        const retryHeads = partyHeadcount(party)
+        const reserved = await reserveSessionPending(sessionId, retryHeads)
         if (!reserved) {
           return NextResponse.json({ error: 'Not enough spots in this session' }, { status: 409 })
         }
+        holdSessionId = String(sessionId)
+        holdCount = retryHeads
+        holdBookingId = String(existing.id)
       }
 
       const { data: updated, error: upErr } = await supabaseAdmin
@@ -181,6 +190,11 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (upErr || !updated) {
+        if (holdSessionId && holdCount > 0) {
+          const released = holdCount
+          holdSessionId = null
+          await releaseSessionPending(String(sessionId), released)
+        }
         return NextResponse.json({ error: sanitizeGuestError(upErr?.message || 'Could not retry payment') }, { status: 500 })
       }
       booking = updated as Record<string, unknown>
@@ -190,6 +204,8 @@ export async function POST(req: NextRequest) {
       if (!reserved) {
         return NextResponse.json({ error: 'Not enough spots in this session' }, { status: 409 })
       }
+      holdSessionId = String(sessionId)
+      holdCount = headcount
 
       ;({ data: booking, error: bErr } = await supabaseAdmin
         .from('bookings')
@@ -205,7 +221,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
               {
                 error:
-                  'Free under-95cm bookings need a database update. Please call 0700 101 425.',
+                  'Under-95cm bookings could not be saved. Please call 0700 101 425.',
               },
               { status: 400 },
             )
@@ -219,6 +235,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (bErr || !booking) {
+        holdSessionId = null
         await releaseSessionPending(sessionId, headcount)
         const msg = bErr?.message || 'Failed to create booking'
         if (/adult_with_child/i.test(msg)) {
@@ -235,6 +252,7 @@ export async function POST(req: NextRequest) {
     }
 
     const bookingId = String(booking.id)
+    if (holdSessionId) holdBookingId = bookingId
     const bookingRef = String(booking.booking_ref)
 
     const stkDescription =
@@ -280,6 +298,7 @@ export async function POST(req: NextRequest) {
           metadata: { booking_kind: bookingKind, party_meta: partyMeta, provider: 'kcb_buni' },
         })
 
+        stkSent = true
         return NextResponse.json({
           success: true,
           bookingRef,
@@ -330,6 +349,7 @@ export async function POST(req: NextRequest) {
       metadata: { booking_kind: bookingKind, party_meta: partyMeta, provider: 'daraja' },
     })
 
+    stkSent = true
     return NextResponse.json({
       success: true,
       bookingRef,
@@ -338,6 +358,16 @@ export async function POST(req: NextRequest) {
       provider: 'daraja',
     })
   } catch (err) {
+    if (!stkSent && holdSessionId && holdCount > 0) {
+      await releaseSessionPending(holdSessionId, holdCount).catch(() => {})
+      if (holdBookingId) {
+        await supabaseAdmin
+          .from('bookings')
+          .update({ payment_status: 'failed', updated_at: new Date().toISOString() })
+          .eq('id', holdBookingId)
+          .eq('payment_status', 'pending')
+      }
+    }
     console.error('Initiate error:', err)
     const message = sanitizeGuestError(
       err instanceof Error && err.message

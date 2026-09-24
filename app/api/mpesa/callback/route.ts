@@ -4,6 +4,7 @@ import { parseMpesaCallback } from '@/lib/mpesa'
 import { postTicketPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
 import { ensureTicketsIssued } from '@/lib/tickets'
+import { bookingHeadcount, releaseSessionBooked, releaseSessionPending } from '@/lib/session-pending'
 
 export async function POST(req: NextRequest) {
   try {
@@ -104,11 +105,23 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', payment.id)
 
-      await supabaseAdmin
+      const { data: failedBooking } = await supabaseAdmin
         .from('bookings')
-        .update({ payment_status: 'failed' })
+        .update({ payment_status: 'failed', updated_at: new Date().toISOString() })
         .eq('id', payment.booking_id)
         .eq('payment_status', 'pending')
+        .select('id, session_id, adult_count, child_count, infant_count')
+        .maybeSingle()
+
+      if (failedBooking?.session_id) {
+        const heads = bookingHeadcount(failedBooking)
+        const { count } = await supabaseAdmin
+          .from('tickets')
+          .select('id', { count: 'exact', head: true })
+          .eq('booking_id', failedBooking.id)
+        if ((count || 0) > 0) await releaseSessionBooked(String(failedBooking.session_id), heads)
+        else await releaseSessionPending(String(failedBooking.session_id), heads)
+      }
     }
 
     return NextResponse.json({ ok: true })
