@@ -413,7 +413,7 @@ async function settleBookingFromKcb(p: {
       .from('payments')
       .insert({
         booking_id: booking.id,
-        payment_channel: 'kcb_buni',
+        payment_channel: 'mpesa',
         amount_kes: p.amount,
         mpesa_checkout_request_id: p.checkoutRequestId,
         mpesa_receipt_number: p.mpesaReceipt,

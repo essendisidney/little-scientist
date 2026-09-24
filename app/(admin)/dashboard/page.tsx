@@ -508,11 +508,13 @@ export default function DashboardPage() {
     setExporting(true)
     try {
       const { data, error } = await supabase
-        // Prefer a view if present in DB
-        .from('v_journal_entries')
+        .from('v_general_ledger')
         .select('*')
         .order('entry_date', { ascending: false })
-      if (error) throw error
+      if (error) {
+        setActionError(error.message || 'Could not export the journal.')
+        return
+      }
       const rows =
         (data || []).map((e: any) => ({
           date: e.entry_date || e.date || '',

@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
 
         await supabaseAdmin.from('payments').insert({
           booking_id: bookingId,
-          payment_channel: 'kcb_buni',
+          payment_channel: 'mpesa',
           amount_kes: total,
           mpesa_checkout_request_id: kcb.payment.kcb_reference,
           mpesa_merchant_request_id: kcb.payment.merchant_request_id || null,

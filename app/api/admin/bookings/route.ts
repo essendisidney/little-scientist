@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
           .from('payments')
           .insert({
             booking_id: booking.id,
-            payment_channel: 'manual',
+            payment_channel: 'mpesa',
             amount_kes: booking.total_amount_kes,
             mpesa_receipt_number: receipt,
             mpesa_phone: booking.booker_phone,
