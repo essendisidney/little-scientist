@@ -337,27 +337,90 @@ export default function TicketPage() {
     ? computeBasket(booking.adult_count, booking.child_count, receiptTiers, infantCount)
     : null
   const receiptTotal = booking ? Number(booking.total_amount_kes) : 0
+  const ticketUrl =
+    typeof window !== 'undefined' && booking
+      ? `${window.location.origin}/ticket/${booking.booking_ref}`
+      : booking
+        ? `https://littlescientist.ke/ticket/${booking.booking_ref}`
+        : ''
+
+  function shareWhatsApp() {
+    if (!booking || !ticketUrl) return
+    const text = [
+      'Little Scientist tickets',
+      `Ref: ${booking.booking_ref}`,
+      `Show this link at the gate:`,
+      ticketUrl,
+    ].join('\n')
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  async function copyTicketLink() {
+    if (!ticketUrl) return
+    try {
+      await navigator.clipboard.writeText(ticketUrl)
+      alert('Ticket link copied. Paste it in WhatsApp or SMS.')
+    } catch {
+      window.prompt('Copy this ticket link:', ticketUrl)
+    }
+  }
 
   return (
     <Wrap
       right={
-        <button
-          className="no-print"
-          onClick={() => window.print()}
-          style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            color: '#fff',
-            padding: '8px 14px',
-            borderRadius: 10,
-            cursor: 'pointer',
-            fontSize: 13,
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontWeight: 800,
-          }}
-        >
-          🖨️ Save / Print
-        </button>
+        <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={shareWhatsApp}
+            style={{
+              background: 'rgba(37,211,102,0.15)',
+              border: '1px solid rgba(37,211,102,0.35)',
+              color: '#25d366',
+              padding: '8px 14px',
+              borderRadius: 10,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontFamily: 'Plus Jakarta Sans, sans-serif',
+              fontWeight: 800,
+            }}
+          >
+            WhatsApp
+          </button>
+          <button
+            type="button"
+            onClick={copyTicketLink}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              color: '#fff',
+              padding: '8px 14px',
+              borderRadius: 10,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontFamily: 'Plus Jakarta Sans, sans-serif',
+              fontWeight: 800,
+            }}
+          >
+            Copy link
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              color: '#fff',
+              padding: '8px 14px',
+              borderRadius: 10,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontFamily: 'Plus Jakarta Sans, sans-serif',
+              fontWeight: 800,
+            }}
+          >
+            Save / Print
+          </button>
+        </div>
       }
     >
       {booking && basket && (
@@ -402,6 +465,46 @@ export default function TicketPage() {
               {infantCount > 0 ? ` · ${infantCount} under 95cm` : ''}
             </div>
           </div>
+
+          <div className="no-print" style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            <button
+              type="button"
+              onClick={shareWhatsApp}
+              style={{
+                background: 'rgba(37,211,102,0.15)',
+                border: '1px solid rgba(37,211,102,0.35)',
+                color: '#25d366',
+                padding: '10px 14px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                fontWeight: 800,
+              }}
+            >
+              Send tickets on WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={copyTicketLink}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: '#fff',
+                padding: '10px 14px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                fontWeight: 800,
+              }}
+            >
+              Copy ticket link
+            </button>
+          </div>
+          <p className="no-print" style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.5 }}>
+            No email needed. Share this link on WhatsApp, keep the tab open, or screenshot the QR codes below.
+          </p>
         </div>
       )}
 
