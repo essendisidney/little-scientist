@@ -15,6 +15,7 @@ describe('buildTicketRows', () => {
       { booking_id: 'b1', ticket_type: 'Adult' },
       { booking_id: 'b1', ticket_type: 'Adult' },
       { booking_id: 'b1', ticket_type: 'Child' },
+      { booking_id: 'b1', ticket_type: 'Child under 95cm' },
     ])
   })
 

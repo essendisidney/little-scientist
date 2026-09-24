@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       const receipt = String(body?.receipt || `MANUAL-${Date.now()}`).slice(0, 40)
 
       if (booking.payment_status !== 'paid') {
-        const { data: payment } = await supabaseAdmin
+        const { data: payment, error: payErr } = await supabaseAdmin
           .from('payments')
           .insert({
             booking_id: booking.id,
@@ -53,16 +53,24 @@ export async function POST(req: NextRequest) {
           .select('id')
           .single()
 
+        if (payErr || !payment) {
+          return NextResponse.json({ error: payErr?.message || 'Could not record payment' }, { status: 500 })
+        }
+
         const issued = await ensureTicketsIssued(booking)
 
-        await supabaseAdmin
+        const { error: paidErr } = await supabaseAdmin
           .from('bookings')
           .update({
             payment_status: 'paid',
-            payment_method: 'manual',
+            payment_method: 'mpesa',
             updated_at: new Date().toISOString(),
           })
           .eq('id', booking.id)
+
+        if (paidErr) {
+          return NextResponse.json({ error: paidErr.message }, { status: 500 })
+        }
 
         if (payment?.id) {
           await supabaseAdmin.from('etr_receipts').insert({
