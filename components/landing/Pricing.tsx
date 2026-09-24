@@ -11,7 +11,7 @@ type DisplayTier = {
 }
 
 const FALLBACK: DisplayTier[] = [
-  { name: 'Little Explorers', who: 'Under 94.9 cm', price: 'FREE' },
+  { name: 'Little Explorers', who: 'Under 94.9 cm', price: 'KES 300' },
   { name: 'Young Scientists', who: '95 cm – 17 yrs', price: 'KES 800', highlight: true },
   { name: 'Adults', who: '18+', price: 'KES 1,000' },
 ]
@@ -21,8 +21,8 @@ function formatPrice(kes: number, free: boolean) {
   return `KES ${kes.toLocaleString('en-KE')}`
 }
 
-export default function Pricing() {
-  const [tiers, setTiers] = useState<DisplayTier[]>(FALLBACK)
+export default function Pricing({ initial }: { initial?: DisplayTier[] }) {
+  const [tiers, setTiers] = useState<DisplayTier[]>(initial?.length ? initial : FALLBACK)
 
   useEffect(() => {
     let alive = true

@@ -218,6 +218,8 @@ export async function POST(req: NextRequest) {
         if (/infant_count/i.test(bErr.message || '')) {
           delete retry.infant_count
           if (childCount === 0 && infantCount > 0) {
+            holdSessionId = null
+            await releaseSessionPending(sessionId, headcount)
             return NextResponse.json(
               {
                 error:
@@ -242,7 +244,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             {
               error:
-                'Adult + free under-95cm bookings are temporarily blocked. Please retry shortly or add a paid child ticket.',
+                'This party could not be saved. Add at least one child or a child under 95cm, then try again.',
             },
             { status: 500 },
           )

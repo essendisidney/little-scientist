@@ -39,9 +39,9 @@ export const DEFAULT_TIERS: PriceTier[] = [
   {
     key: 'infant',
     label: 'Under 95cm',
-    sublabel: 'Height under 95cm — FREE entry',
-    priceInclVat: 0,
-    free: true,
+    sublabel: 'Height under 95cm',
+    priceInclVat: 300,
+    free: false,
   },
 ]
 
