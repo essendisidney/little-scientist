@@ -12,6 +12,7 @@ import type { AppMpesaInitiateInput, KcbPaymentStatus, ParsedKcbCallback } from 
 import { postTicketPayment, postInVenuePurchase, postMerchPayment } from '@/lib/accounting'
 import { notifyBookingPaid } from '@/lib/booking-notify'
 import { ensureTicketsIssued } from '@/lib/tickets'
+import { bookingHeadcount, releaseSessionBooked, releaseSessionPending } from '@/lib/session-pending'
 
 type PaymentRow = {
   id: string
@@ -258,11 +259,23 @@ export async function processKcbCallback(rawBody: unknown) {
   } else if (!parsed.success && payment.source_type === 'booking' && payment.source_id) {
     // DB check only allows pending|paid|failed|refunded — map cancel/timeout → failed
     const failReason = parsed.cancelled ? 'cancelled' : parsed.timedOut ? 'timeout' : 'failed'
-    await supabaseAdmin
+    const { data: failedBooking } = await supabaseAdmin
       .from('bookings')
       .update({ payment_status: 'failed', updated_at: now })
       .eq('id', payment.source_id)
       .eq('payment_status', 'pending')
+      .select('id, session_id, adult_count, child_count, infant_count')
+      .maybeSingle()
+
+    if (failedBooking?.session_id) {
+      const heads = bookingHeadcount(failedBooking)
+      const { count } = await supabaseAdmin
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('booking_id', failedBooking.id)
+      if ((count || 0) > 0) await releaseSessionBooked(String(failedBooking.session_id), heads)
+      else await releaseSessionPending(String(failedBooking.session_id), heads)
+    }
 
     await supabaseAdmin
       .from('payments')

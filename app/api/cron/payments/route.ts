@@ -18,12 +18,17 @@ export async function GET(req: NextRequest) {
   const timedOut = await markProcessingTimeouts(15)
 
   const cutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString()
-  const { data: stale } = await supabaseAdmin
+  const { data: stale, error: expireErr } = await supabaseAdmin
     .from('bookings')
     .update({ payment_status: 'expired', updated_at: new Date().toISOString() })
     .eq('payment_status', 'pending')
     .lt('created_at', cutoff)
     .select('id, session_id, adult_count, child_count, infant_count')
+
+  if (expireErr) {
+    console.error('expire stale bookings failed', expireErr.message)
+    return NextResponse.json({ error: expireErr.message, kcbTimedOut: timedOut }, { status: 500 })
+  }
 
   for (const b of stale || []) {
     if (b.session_id) {

@@ -37,6 +37,14 @@ export async function releaseSessionPending(sessionId: string, count: number): P
   if (error) console.error('release_session_pending failed', error.message)
 }
 
+export async function releaseSessionBooked(sessionId: string, count: number): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('release_session_booked', {
+    p_session_id: sessionId,
+    p_count: count,
+  })
+  if (error) console.error('release_session_booked failed', error.message)
+}
+
 export async function confirmSessionBooking(sessionId: string, count: number): Promise<void> {
   const { error } = await supabaseAdmin.rpc('confirm_session_booking', {
     p_session_id: sessionId,
