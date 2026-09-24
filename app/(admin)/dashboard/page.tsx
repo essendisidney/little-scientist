@@ -27,6 +27,12 @@ function enquiryStatusStyle(status: string): { bg: string; color: string } {
   return { bg: 'rgba(255,217,74,0.12)', color: '#ffd700' }
 }
 
+function partyLabel(b: { adult_count?: number; child_count?: number; infant_count?: number | null }) {
+  const parts = [`${b.adult_count || 0}A`, `${b.child_count || 0}C`]
+  if ((b.infant_count || 0) > 0) parts.push(`${b.infant_count}I`)
+  return parts.join(' · ')
+}
+
 function phoneTel(href: string) {
   const digits = href.replace(/\D/g, '')
   return digits ? `tel:+${digits.startsWith('254') ? digits : `254${digits.replace(/^0/, '')}`}` : undefined
@@ -139,6 +145,7 @@ export default function DashboardPage() {
       booker_phone?: string | null
       adult_count: number
       child_count: number
+      infant_count?: number | null
       total_amount_kes: number
       payment_status: string
       sessions?: { time_slot?: string; session_date?: string } | null
@@ -150,6 +157,7 @@ export default function DashboardPage() {
       booker_name: string | null
       adult_count: number
       child_count: number
+      infant_count?: number | null
       total_amount_kes: number
       payment_status: string
       sessions?: { session_date?: string; time_slot?: string } | null
@@ -213,20 +221,20 @@ export default function DashboardPage() {
       const [bRes, dayRes, rRes, tbRes] = await Promise.all([
         supabase
           .from('bookings')
-          .select('total_amount_kes, adult_count, child_count')
+          .select('total_amount_kes, adult_count, child_count, infant_count')
           .eq('payment_status', 'paid'),
         sessionIds.length
           ? supabase
               .from('bookings')
               .select(
-                'booking_ref, booker_name, booker_phone, adult_count, child_count, total_amount_kes, payment_status, session_id, sessions(time_slot, session_date)',
+                'booking_ref, booker_name, booker_phone, adult_count, child_count, infant_count, total_amount_kes, payment_status, session_id, sessions(time_slot, session_date)',
               )
               .in('session_id', sessionIds)
               .order('created_at', { ascending: false })
           : Promise.resolve({ data: [] as never[] }),
         supabase
           .from('bookings')
-          .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status, sessions(session_date, time_slot)')
+          .select('booking_ref, booker_name, adult_count, child_count, infant_count, total_amount_kes, payment_status, sessions(session_date, time_slot)')
           .order('created_at', { ascending: false })
           .limit(40),
         supabase.from('v_trial_balance').select('*').neq('net_balance', 0),
@@ -234,7 +242,7 @@ export default function DashboardPage() {
       const paid = bRes.data || []
       setKpis({
         ticketRev: paid.reduce((s, b) => s + b.total_amount_kes, 0),
-        visitors: paid.reduce((s, b) => s + b.adult_count + b.child_count, 0),
+        visitors: paid.reduce((s, b) => s + (b.adult_count || 0) + (b.child_count || 0) + (b.infant_count || 0), 0),
         bookings: paid.length,
       })
       setSessions((sRes.data || []) as typeof sessions)
@@ -307,7 +315,7 @@ export default function DashboardPage() {
         const dayRes = await supabase
           .from('bookings')
           .select(
-            'booking_ref, booker_name, booker_phone, adult_count, child_count, total_amount_kes, payment_status, session_id, sessions(time_slot, session_date)',
+            'booking_ref, booker_name, booker_phone, adult_count, child_count, infant_count, total_amount_kes, payment_status, session_id, sessions(time_slot, session_date)',
           )
           .in('session_id', sessionIds)
           .order('created_at', { ascending: false })
@@ -461,7 +469,7 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select('booker_name, booker_phone, adult_count, child_count, sessions(time_slot, session_date)')
+        .select('booker_name, booker_phone, adult_count, child_count, infant_count, sessions(time_slot, session_date)')
       if (error) throw error
       const rows =
         (((data || []) as any[])
@@ -469,7 +477,7 @@ export default function DashboardPage() {
           .map(b => ({
             visitor_name: b.booker_name || '',
             phone: b.booker_phone || '',
-            count: (b.adult_count || 0) + (b.child_count || 0),
+            count: (b.adult_count || 0) + (b.child_count || 0) + (b.infant_count || 0),
             time_slot: SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '',
             date: b.sessions?.session_date || selectedDate,
           })) as Record<string, unknown>[]) || []
@@ -484,7 +492,7 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select('booking_ref, booker_name, adult_count, child_count, total_amount_kes, payment_status, sessions(session_date, time_slot)')
+        .select('booking_ref, booker_name, adult_count, child_count, infant_count, total_amount_kes, payment_status, sessions(session_date, time_slot)')
         .order('created_at', { ascending: false })
       if (error) throw error
       const rows =
@@ -884,7 +892,7 @@ export default function DashboardPage() {
                             {SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '—'}
                           </td>
                           <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.5)' }}>
-                            {b.adult_count}A · {b.child_count}C
+                            {partyLabel(b)}
                           </td>
                           <td style={{ padding: '10px 12px', fontWeight: 700 }}>KES {b.total_amount_kes.toLocaleString()}</td>
                           <td style={{ padding: '10px 12px' }}>
@@ -1126,7 +1134,7 @@ export default function DashboardPage() {
                       {SLOT_LABELS[b.sessions?.time_slot || ''] || b.sessions?.time_slot || '—'}
                     </td>
                     <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.5)' }}>
-                      {b.adult_count}A · {b.child_count}C
+                      {partyLabel(b)}
                     </td>
                     <td style={{ padding: '10px 16px', fontWeight: 700 }}>KES {b.total_amount_kes.toLocaleString()}</td>
                     <td style={{ padding: '10px 16px' }}>

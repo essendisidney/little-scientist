@@ -180,7 +180,15 @@ export default function AccountingPage() {
     let q = supabase.from('v_general_ledger').select('*').order('entry_date', { ascending: false })
     if (glFrom) q = q.gte('entry_date', glFrom)
     if (glTo) q = q.lte('entry_date', glTo)
-    if (glSource !== 'all') q = q.eq('source_type', glSource)
+    const sourceDb: Record<string, string> = {
+      booking: 'booking',
+      merch: 'merch_order',
+      invenue: 'in_venue_purchase',
+      school: 'school_invoice',
+      events: 'events',
+      manual: 'manual',
+    }
+    if (glSource !== 'all') q = q.eq('source_type', sourceDb[glSource] || glSource)
     const { data, error } = await q
     if (error) {
       setError(error.message)
@@ -284,12 +292,12 @@ export default function AccountingPage() {
   }, [])
 
   const qbRevenueRows = useMemo(
-    () => (qbRows || []).filter((r: any) => /^40/.test(String(r.credit_account_code || ''))),
+    () => (qbRows || []).filter((r: any) => /^40/.test(String(r.credit_account_code || r.credit_code || ''))),
     [qbRows],
   )
 
   const qbBankRows = useMemo(
-    () => (qbRows || []).filter((r: any) => String(r.debit_account_code || '') === '1001'),
+    () => (qbRows || []).filter((r: any) => String((r.debit_account_code || r.debit_code) || '') === '1001'),
     [qbRows],
   )
 
@@ -345,7 +353,7 @@ export default function AccountingPage() {
         amountInclVat: Number(r.amount_kes) || 0,
         paymentMethod: 'M-Pesa',
         depositAccount: QB_ACCOUNT_MAP['1001'],
-        memo: `GL ${fmtRef(r.source_type, r.source_id)} · ${r.credit_account_code || ''}`.trim(),
+        memo: `GL ${fmtRef(r.source_type, r.source_id)} · ${(r.credit_account_code || r.credit_code) || ''}`.trim(),
         mpesaReceipt: r.mpesa_receipt || '',
       }
     })
@@ -367,8 +375,8 @@ export default function AccountingPage() {
         journalNo: String(journalNo),
         journalDate: String(r.entry_date || ''),
         description: String(r.description || sourceLabel(r.source_type)),
-        debitCode: String(r.debit_account_code || '1001'),
-        creditCode: String(r.credit_account_code || 'UNCATEGORISED'),
+        debitCode: String((r.debit_account_code || r.debit_code) || '1001'),
+        creditCode: String((r.credit_account_code || r.credit_code) || 'UNCATEGORISED'),
         amountInclVat: Number(r.amount_kes) || 0,
         splitVatOnRevenue: qbSplitVat,
         name: (r.source_id && qbBookingNames[String(r.source_id)]) || undefined,
@@ -407,9 +415,9 @@ export default function AccountingPage() {
       month[k] = 0
     }
     for (const r of revRows || []) {
-      const code = String(r.revenue_account || r.account_code || '')
-      const amt = Number(r.revenue_kes ?? r.amount_kes ?? 0) || 0
-      const date = String(r.entry_date || r.date || '')
+      const code = String(r.code || r.revenue_account || r.account_code || '')
+      const amt = Number(r.amount_kes ?? r.revenue_kes ?? 0) || 0
+      const date = String(r.day || r.entry_date || r.date || '')
       const hit = Object.entries(REV_LABELS).find(([, v]) => v.code === code)
       if (!hit) continue
       const key = hit[0]
@@ -631,8 +639,8 @@ export default function AccountingPage() {
                     date: r.entry_date || '',
                     ref: fmtRef(r.source_type, r.source_id),
                     description: r.description || '',
-                    debit_account: r.debit_account_code || '',
-                    credit_account: r.credit_account_code || '',
+                    debit_account: (r.debit_account_code || r.debit_code) || '',
+                    credit_account: (r.credit_account_code || r.credit_code) || '',
                     amount_kes: r.amount_kes ?? '',
                     mpesa_receipt: r.mpesa_receipt || '',
                     reconciled: !!glRecon[`${r.entry_date}|${r.source_type}|${r.source_id}|${r.amount_kes}|${r.mpesa_receipt}`],
@@ -709,10 +717,10 @@ export default function AccountingPage() {
                           {r.description || ''}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                          {r.debit_account_code || ''}
+                          {(r.debit_account_code || r.debit_code) || ''}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: 800, whiteSpace: 'nowrap' }}>
-                          {r.credit_account_code || ''}
+                          {(r.credit_account_code || r.credit_code) || ''}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 12, color: amountColor, fontWeight: 900, textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {kes(amount)}
@@ -952,8 +960,8 @@ export default function AccountingPage() {
                     date: r.entry_date || '',
                     ref: fmtRef(r.source_type, r.source_id),
                     description: r.description || '',
-                    debit: r.debit_account_code || '',
-                    credit: r.credit_account_code || '',
+                    debit: (r.debit_account_code || r.debit_code) || '',
+                    credit: (r.credit_account_code || r.credit_code) || '',
                     amount_kes: r.amount_kes ?? '',
                     mpesa_receipt: r.mpesa_receipt || '',
                   }))
@@ -1052,8 +1060,8 @@ export default function AccountingPage() {
                         <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: 900, whiteSpace: 'nowrap' }}>{r.entry_date || ''}</td>
                         <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 900, whiteSpace: 'nowrap' }}>{fmtRef(r.source_type, r.source_id)}</td>
                         <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: 800 }}>{r.description || ''}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 900, whiteSpace: 'nowrap' }}>{r.debit_account_code || ''}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 900, whiteSpace: 'nowrap' }}>{r.credit_account_code || ''}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 900, whiteSpace: 'nowrap' }}>{(r.debit_account_code || r.debit_code) || ''}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 900, whiteSpace: 'nowrap' }}>{(r.credit_account_code || r.credit_code) || ''}</td>
                         <td style={{ padding: '10px 12px', fontSize: 12, textAlign: 'right', color: '#2ecc71', fontWeight: 900, whiteSpace: 'nowrap' }}>{kes(r.amount_kes ?? 0)}</td>
                       </tr>
                     ))}
@@ -1267,7 +1275,7 @@ export default function AccountingPage() {
                           {r.mpesa_receipt || '—'}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 900 }}>
-                          {r.credit_account_code || ''}
+                          {(r.credit_account_code || r.credit_code) || ''}
                         </td>
                       </tr>
                     )

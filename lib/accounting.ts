@@ -31,10 +31,11 @@ export async function postTicketPayment(p: {
   const kind = String(p.bookingKind || 'general').toLowerCase()
   const creditCode = kind === 'school' ? '4004' : kind === 'birthday' ? '4005' : '4001'
   const label = kind === 'school' ? 'School trip' : kind === 'birthday' ? 'Birthday booking' : 'Ticket booking'
+  const sourceType = kind === 'school' ? 'school_invoice' : kind === 'birthday' ? 'events' : 'booking'
 
   await postEntry({
     description: `${label} — ${p.mpesaReceipt}`,
-    sourceType: kind === 'general' ? 'booking' : kind,
+    sourceType,
     sourceId: p.bookingId,
     debitCode: '1001',
     creditCode,
@@ -44,7 +45,7 @@ export async function postTicketPayment(p: {
   if (p.platformFeeKes > 0) {
     await postEntry({
       description: `Platform fee — ${p.bookingId}`,
-      sourceType: kind === 'general' ? 'booking' : kind,
+      sourceType,
       sourceId: p.bookingId,
       debitCode: '1001',
       creditCode: '4010',
