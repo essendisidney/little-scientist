@@ -3,9 +3,9 @@
  *
  * The park is for children. Realistic party mixes:
  * - Adults alone → blocked
- * - Children / free infants alone → blocked (need a supervising adult)
+ * - Children / under-95cm alone → blocked (need a supervising adult)
  * - Adult(s) + paid child(ren) → ok
- * - Adult(s) + free infant(s) only → ok
+ * - Adult(s) + under-95cm only → ok
  * - Adult(s) + mix of children and infants → ok
  */
 
@@ -65,7 +65,7 @@ export function validateBookingParty(raw: PartyCounts): PartyValidation {
       ok: false,
       code: 'EMPTY',
       title: "Who's coming?",
-      message: 'Add at least one adult and one child (or free infant) to book a visit.',
+      message: 'Add at least one adult and one child (95cm–17 years, or under 95cm) to book a visit.',
       actionLabel: 'Add visitors',
       focus: 'any',
     }
@@ -76,8 +76,8 @@ export function validateBookingParty(raw: PartyCounts): PartyValidation {
     const title = p.adults === 1 ? 'Bring a little scientist' : 'Adults need little scientists'
     const message =
       p.adults === 1
-        ? 'An adult ticket can’t be booked alone. Add at least one child (95cm–17 years) or a free infant (94.9cm and below).'
-        : 'Adult-only groups aren’t allowed. Add at least one child or free infant so there’s a little scientist in the party.'
+        ? 'An adult ticket can’t be booked alone. Add at least one child (95cm–17 years) or a child under 95cm.'
+        : 'Adult-only groups aren’t allowed. Add at least one child or a child under 95cm so there’s a little scientist in the party.'
     return {
       ok: false,
       code: 'ADULTS_ONLY',
@@ -96,13 +96,13 @@ export function validateBookingParty(raw: PartyCounts): PartyValidation {
       'Every child must be accompanied and supervised by a responsible adult. Please add at least one adult to continue.'
     if (onlyInfants) {
       message =
-        'Free infant entry still needs a supervising adult at the gate. Please add at least one adult ticket.'
+        'A child under 95cm still needs a supervising adult at the gate. Please add at least one adult ticket.'
     } else if (onlyPaid) {
       message =
         'Children can’t visit without an adult. Please add at least one adult ticket to continue.'
     } else {
       message =
-        'Children and free infants must visit with a supervising adult. Please add at least one adult ticket.'
+        'Children, including those under 95cm, must visit with a supervising adult. Please add at least one adult ticket.'
     }
     return {
       ok: false,

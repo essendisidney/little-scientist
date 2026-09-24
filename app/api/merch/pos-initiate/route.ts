@@ -87,11 +87,37 @@ export async function POST(req: NextRequest) {
 
     if (oErr || !order) return NextResponse.json({ error: oErr?.message || 'Failed to create order' }, { status: 500 })
 
-    await supabaseAdmin.from('merch_order_items').insert({
+    const { data: product } = await supabaseAdmin
+      .from('merch_products')
+      .select('id, name')
+      .eq('id', productId)
+      .maybeSingle()
+    if (!product) {
+      await supabaseAdmin.from('merch_orders').delete().eq('id', order.id)
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    }
+
+    const { data: variant } = await supabaseAdmin
+      .from('merch_variants')
+      .select('id')
+      .eq('product_id', product.id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+
+    const { error: itemErr } = await supabaseAdmin.from('merch_order_items').insert({
       order_id: order.id,
+      product_id: product.id,
+      variant_id: variant?.id || null,
       quantity: qty,
       unit_price_kes: unit,
+      line_total_kes: totalKes,
+      product_name_snapshot: product.name,
     })
+    if (itemErr) {
+      await supabaseAdmin.from('merch_orders').delete().eq('id', order.id)
+      return NextResponse.json({ error: itemErr.message || 'Failed to add the product to the order' }, { status: 500 })
+    }
 
     const provider = (process.env.PAYMENT_PROVIDER || (isKcbConfigured() ? 'kcb' : 'daraja')).toLowerCase()
     const useKcb = useKcbPayments()
