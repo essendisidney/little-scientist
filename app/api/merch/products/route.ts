@@ -2,16 +2,31 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/admin-auth'
 
+function skuFromName(name: string) {
+  const base =
+    name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 18) || 'ITEM'
+  return `${base}-${Date.now().toString(36).toUpperCase()}`
+}
+
 function normalizeProduct(row: Record<string, unknown>) {
+  const basePrice = Number(row.base_price_kes ?? 0)
   const variants = ((row.merch_variants as Record<string, unknown>[]) || []).map((v) => ({
     ...v,
-    is_active: v.is_active ?? v.active ?? true,
+    name: (v.variant_value as string) || (v.name as string) || 'Default',
+    is_active: v.is_active ?? true,
     stock_qty: Number(v.stock_qty ?? 0),
+    // UI reads price_kes; production stores the selling price on the product.
+    price_kes: basePrice + Number(v.price_adjustment_kes ?? 0),
   }))
   return {
     ...row,
     category: row.category ?? null,
-    is_active: row.is_active ?? row.active ?? true,
+    is_active: row.is_active ?? true,
+    price_kes: basePrice,
     merch_variants: variants,
   }
 }
@@ -36,71 +51,60 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { name, description, category, priceKes, stockQty } = body as Record<string, unknown>
 
-    if (!name || !category || priceKes == null || stockQty == null) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!name || priceKes == null || stockQty == null) {
+      return NextResponse.json({ error: 'Name, price, and stock are required' }, { status: 400 })
     }
 
-    // Insert with both modern + legacy column names for mixed schemas
-    const productInsert: Record<string, unknown> = {
-      name: String(name),
-      description: description ? String(description) : null,
-      category: String(category),
-      is_active: true,
-      active: true,
+    const price = Number(priceKes)
+    const stock = Math.max(0, Math.round(Number(stockQty)))
+    if (!Number.isFinite(price) || price < 0) {
+      return NextResponse.json({ error: 'Invalid price' }, { status: 400 })
     }
 
-    let { data: product, error: pErr } = await supabaseAdmin
+    const sku = skuFromName(String(name))
+    const { data: product, error: pErr } = await supabaseAdmin
       .from('merch_products')
-      .insert(productInsert)
+      .insert({
+        name: String(name).trim(),
+        description: description ? String(description) : null,
+        category: category ? String(category) : null,
+        sku,
+        base_price_kes: price,
+        is_active: true,
+        has_variants: true,
+      })
       .select()
       .single()
 
-    // Retry without columns that may not exist yet
-    if (pErr && /category|is_active|schema cache/i.test(pErr.message)) {
-      const retry: Record<string, unknown> = {
-        name: String(name),
-        description: description ? String(description) : null,
-        active: true,
-      }
-      const r2 = await supabaseAdmin.from('merch_products').insert(retry).select().single()
-      product = r2.data
-      pErr = r2.error
-      if (!pErr && product && /category/i.test(String((await supabaseAdmin.from('merch_products').update({ category: String(category) }).eq('id', product.id)).error?.message || ''))) {
-        // category column still missing — product created without category
-      }
-    }
-
     if (pErr || !product) {
-      return NextResponse.json(
-        {
-          error:
-            pErr?.message ||
-            'Failed to create product. Apply migration 016 to add merch category / stock columns.',
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: pErr?.message || 'Failed to create product' }, { status: 500 })
     }
 
-    const variantInsert: Record<string, unknown> = {
-      product_id: product.id,
-      name: 'Default',
-      price_kes: Number(priceKes),
-      stock_qty: Number(stockQty),
-      is_active: true,
-      active: true,
-    }
-
-    let { error: vErr } = await supabaseAdmin.from('merch_variants').insert(variantInsert)
-    if (vErr && /stock_qty|is_active|schema cache/i.test(vErr.message)) {
-      const r = await supabaseAdmin.from('merch_variants').insert({
+    const { data: variant, error: vErr } = await supabaseAdmin
+      .from('merch_variants')
+      .insert({
         product_id: product.id,
-        name: 'Default',
-        price_kes: Number(priceKes),
-        active: true,
+        variant_type: 'default',
+        variant_value: 'One size',
+        sku_suffix: 'DEF',
+        price_adjustment_kes: 0,
+        stock_qty: stock,
+        is_active: true,
       })
-      vErr = r.error
+      .select('id')
+      .single()
+
+    if (vErr || !variant) {
+      await supabaseAdmin.from('merch_products').delete().eq('id', product.id)
+      return NextResponse.json({ error: vErr?.message || 'Failed to create variant' }, { status: 500 })
     }
-    if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 })
+
+    await supabaseAdmin.from('merch_inventory').insert({
+      product_id: product.id,
+      variant_id: variant.id,
+      location: 'main',
+      quantity_on_hand: stock,
+    })
 
     return NextResponse.json({ success: true, productId: product.id })
   } catch (err) {

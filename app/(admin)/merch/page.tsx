@@ -112,6 +112,19 @@ export default function MerchPage() {
     }
   }
 
+  async function removeProduct(p: Product) {
+    if (!window.confirm(`Delete “${p.name}”? This cannot be undone.`)) return
+    setError('')
+    try {
+      const res = await staffFetch(`/api/merch/products/${p.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to delete product')
+      setProducts(ps => ps.filter(x => x.id !== p.id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete product')
+    }
+  }
+
   async function toggleActive(p: Product) {
     setError('')
     try {
@@ -435,6 +448,22 @@ export default function MerchPage() {
                                 }}
                               >
                                 {p.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => removeProduct(p)}
+                                style={{
+                                  background: 'rgba(248,113,113,0.08)',
+                                  border: '1px solid rgba(248,113,113,0.35)',
+                                  color: '#f87171',
+                                  padding: '8px 10px',
+                                  borderRadius: 8,
+                                  cursor: 'pointer',
+                                  fontWeight: 900,
+                                  fontFamily: 'Nunito, sans-serif',
+                                  fontSize: 12,
+                                }}
+                              >
+                                Delete
                               </button>
                             </div>
                           </td>
