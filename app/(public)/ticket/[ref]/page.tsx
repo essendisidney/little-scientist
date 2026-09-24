@@ -334,7 +334,7 @@ export default function TicketPage() {
       )
     : DEFAULT_TIERS
   const basket = booking
-    ? computeBasket(booking.adult_count, booking.child_count, receiptTiers, isBirthday ? infantCount : 0)
+    ? computeBasket(booking.adult_count, booking.child_count, receiptTiers, infantCount)
     : null
   const receiptTotal = booking ? Number(booking.total_amount_kes) : 0
 
@@ -421,7 +421,7 @@ export default function TicketPage() {
           {[
             { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
             { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
-            ...(isBirthday && infantCount > 0
+            ...(infantCount > 0
               ? [{ label: `Entry fee — Under 95cm × ${infantCount}`, amount: basket.infantTotal }]
               : []),
           ]
@@ -439,9 +439,11 @@ export default function TicketPage() {
                 KES {receiptTotal.toLocaleString('en-KE')}
               </span>
             </div>
-            <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.45)', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, lineHeight: 1.7, maxWidth: 600 }}>
-              Children 94.9cm and below enter FREE (not ticketed). Please inform gate staff for height checks.
-            </div>
+            {basket.infantPrice <= 0 && (
+              <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.45)', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, lineHeight: 1.7, maxWidth: 600 }}>
+                Children 94.9cm and below enter FREE (not ticketed). Please inform gate staff for height checks.
+              </div>
+            )}
           </div>
         </div>
       )}

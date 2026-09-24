@@ -446,11 +446,15 @@ export default function BookPage() {
   }
 
   const activePricing: Pricing = visitType === 'birthday' ? birthdayPricing : pricing
+  const infantPriceKes = Number(activePricing.childUnder95cmKes || 0)
+  const infantIsFree = infantPriceKes <= 0
+  // Charge under-95cm whenever admin set a price (general + birthday); school trips ignore this counter.
+  const chargeInfants = visitType !== 'school'
 
   const total =
     adults * activePricing.adult18PlusKes +
     childrenPaid * activePricing.child95cmTo17Kes +
-    (visitType === 'birthday' ? childrenFreeUnder95 * activePricing.childUnder95cmKes : 0)
+    (chargeInfants ? childrenFreeUnder95 * infantPriceKes : 0)
   const spotsLeft = selectedSession ? sessionOpenSpots(selectedSession) : 0
   const schoolHeadcount = Math.max(0, studentCount) + Math.max(0, staffCount)
   const schoolTooLarge = visitType === 'school' && schoolHeadcount > spotsLeft
@@ -476,19 +480,20 @@ export default function BookPage() {
     {
       key: 'infant',
       label: '94.9 cm and below',
-      sublabel:
-        visitType === 'birthday'
+      sublabel: infantIsFree
+        ? 'Children 94.9cm and below — FREE entry'
+        : visitType === 'birthday'
           ? 'Children 94.9cm and below — birthday rate'
-          : 'Children 94.9cm and below — FREE entry',
-      priceInclVat: visitType === 'birthday' ? activePricing.childUnder95cmKes : 0,
-      free: visitType !== 'birthday',
+          : 'Children 94.9cm and below',
+      priceInclVat: infantPriceKes,
+      free: infantIsFree,
     },
   ]
   const basket = computeBasket(
     adults,
     childrenPaid,
     tiersForBasket,
-    visitType === 'birthday' ? childrenFreeUnder95 : 0,
+    chargeInfants ? childrenFreeUnder95 : 0,
   )
   const monthName = new Date(currentMonth.year, currentMonth.month).toLocaleDateString('en-KE', {
     month: 'long',
@@ -531,7 +536,7 @@ export default function BookPage() {
       const payTotal =
         adultCount * activePricing.adult18PlusKes +
         childCount * activePricing.child95cmTo17Kes +
-        (visitType === 'birthday' ? infantCount * activePricing.childUnder95cmKes : 0)
+        infantCount * infantPriceKes
 
       const partyCheck = validatePaidCheckout(
         { adults: adultCount, children: childCount, infants: infantCount },
@@ -1567,7 +1572,7 @@ export default function BookPage() {
 
                 {!needsEnquiry && visitType !== 'school' && (
                   <>
-                    {visitType === 'general' && (
+                    {visitType === 'general' && infantIsFree && (
                       <div className="warn" style={{ background: 'rgba(255,217,74,0.07)' }}>
                         👶🏾 Children <strong>94.9cm and below</strong> enter <strong>FREE</strong> — no ticket needed.
                         Please inform gate staff.
@@ -1580,10 +1585,8 @@ export default function BookPage() {
                     >
                       <div className="ctr-info">
                         <h3>👶🏾 Children (94.9cm and below)</h3>
-                        <p style={{ color: visitType === 'birthday' ? '#FFD94A' : 'rgba(255,255,255,0.5)' }}>
-                          {visitType === 'birthday'
-                            ? `KES ${activePricing.childUnder95cmKes.toLocaleString()}`
-                            : 'FREE'}
+                        <p style={{ color: infantIsFree ? 'rgba(255,255,255,0.5)' : '#FFD94A' }}>
+                          {infantIsFree ? 'FREE' : `KES ${infantPriceKes.toLocaleString()}`}
                         </p>
                       </div>
                       <div className="ctr-ctrl">
@@ -1857,14 +1860,10 @@ export default function BookPage() {
                     <div className="sum-row">
                       <span>
                         👶🏾 Children (94.9cm and below)
-                        {visitType === 'birthday' ? '' : ' (FREE)'} × {childrenFreeUnder95}
+                        {infantIsFree ? ' (FREE)' : ''} × {childrenFreeUnder95}
                       </span>
                       <span>
-                        KES{' '}
-                        {(visitType === 'birthday'
-                          ? childrenFreeUnder95 * activePricing.childUnder95cmKes
-                          : 0
-                        ).toLocaleString()}
+                        KES {(childrenFreeUnder95 * infantPriceKes).toLocaleString()}
                       </span>
                     </div>
                   )}
@@ -1893,7 +1892,7 @@ export default function BookPage() {
                         visitType === 'school' ? staffCount : adults,
                         visitType === 'school' ? studentCount : childrenPaid,
                         tiersForBasket,
-                        visitType === 'birthday' ? childrenFreeUnder95 : 0,
+                        visitType === 'school' ? 0 : childrenFreeUnder95,
                       ).grandTotalFormatted}
                     </span>
                   </div>
