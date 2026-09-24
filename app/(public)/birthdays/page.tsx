@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import WatermarkBg from '@/components/portal/WatermarkBg'
 import Disclaimers from '@/components/portal/Disclaimers'
@@ -8,9 +8,10 @@ import TermsGate from '@/components/portal/TermsGate'
 import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo } from '../book/VisitTypeUi'
 import { toLocalDateKey } from '@/lib/dates'
 import { isValidKenyaPhone } from '@/lib/phone'
+import { supabase } from '@/lib/supabase'
 
-const MIN_CHILDREN = 20
-const MIN_ADULTS = 2
+const MIN_CHILDREN = 1
+const MIN_ADULTS = 1
 
 export default function BirthdaysPage() {
   const [sessionMode, setSessionMode] = useState<'shared' | 'exclusive'>('shared')
@@ -25,8 +26,33 @@ export default function BirthdaysPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [enquiryRef, setEnquiryRef] = useState('')
+  const [rates, setRates] = useState({ adult: 1500, child: 1500, infant: 800 })
 
   const minDate = useMemo(() => toLocalDateKey(), [])
+
+  useEffect(() => {
+    let alive = true
+    supabase
+      .from('pricing_tiers')
+      .select('key, price_kes')
+      .eq('active', true)
+      .then(({ data }) => {
+        if (!alive || !data?.length) return
+        const price = (key: string, fallback: number) => {
+          const row = data.find(t => t.key === key)
+          const n = Number(row?.price_kes)
+          return Number.isFinite(n) ? n : fallback
+        }
+        setRates({
+          adult: price('birthday_adult', 1500),
+          child: price('birthday_child', 1500),
+          infant: price('birthday_infant', 800),
+        })
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   async function submit() {
     setError('')
@@ -102,6 +128,11 @@ export default function BirthdaysPage() {
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
+            <p className="mb-4 text-sm font-semibold text-white/70">
+              Birthday rates: adults KES {rates.adult.toLocaleString('en-KE')}, children KES{' '}
+              {rates.child.toLocaleString('en-KE')}, under 95cm KES {rates.infant.toLocaleString('en-KE')}. This form
+              sends a request — we confirm by phone or WhatsApp.
+            </p>
             <FieldLabel>Session type</FieldLabel>
             <SegmentedTwo
               value={sessionMode}
