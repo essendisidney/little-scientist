@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { sendInfoEmail, sendGuestEmail } from '@/lib/email'
+import { sendInfoEmail } from '@/lib/email'
 import { sanitizeGuestError } from '@/lib/guest-errors'
 import { isValidKenyaPhone } from '@/lib/phone'
 import { rateLimit } from '@/lib/rate-limit'
@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
       schoolName,
       contactName,
       contactPhone,
-      contactEmail,
       studentCount,
       preferredDate,
       sessionType,
@@ -33,7 +32,6 @@ export async function POST(req: NextRequest) {
       !schoolName ||
       !contactName ||
       !contactPhone ||
-      !contactEmail ||
       !studentCount ||
       !preferredDate ||
       !sessionType
@@ -51,7 +49,7 @@ export async function POST(req: NextRequest) {
       school_name: String(schoolName),
       contact_name: String(contactName),
       contact_phone: String(contactPhone),
-      contact_email: String(contactEmail),
+      contact_email: '',
       student_count: Number(studentCount),
       preferred_date: String(preferredDate),
       session_type: String(sessionType),
@@ -72,7 +70,6 @@ export async function POST(req: NextRequest) {
       `School name: ${payload.school_name}`,
       `Contact person: ${payload.contact_name}`,
       `Phone: ${payload.contact_phone}`,
-      `Email: ${payload.contact_email}`,
       `Number of students: ${payload.student_count}`,
       `Preferred date: ${payload.preferred_date}`,
       `Session type: ${payload.session_type}`,
@@ -86,26 +83,6 @@ export async function POST(req: NextRequest) {
         String(payload.special_requirements || '').includes('CUSTOMIZED PLAN') ? ' — CUSTOM PLAN' : ''
       }`,
       text,
-    })
-
-    await sendGuestEmail({
-      to: payload.contact_email,
-      subject: `Little Scientist school trip enquiry — ${enquiryRef}`,
-      text: [
-        `Hi ${payload.contact_name},`,
-        '',
-        'Thank you — we received your school trip enquiry.',
-        '',
-        `Reference: ${enquiryRef}`,
-        `School: ${payload.school_name}`,
-        `Preferred date: ${payload.preferred_date}`,
-        `Students: ${payload.student_count}`,
-        '',
-        'Our team will contact you by email or phone.',
-        '',
-        '— Little Scientist',
-        '0700 101 425 · info@littlescientist.ke',
-      ].join('\n'),
     })
 
     return NextResponse.json({ success: true, enquiryRef })

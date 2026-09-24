@@ -14,7 +14,6 @@ export default function SchoolsPage() {
   const [schoolName, setSchoolName] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
   const [date, setDate] = useState('')
   const [children, setChildren] = useState(20)
   const [adults, setAdults] = useState(2)
@@ -33,7 +32,7 @@ export default function SchoolsPage() {
       setError('Please read and accept the Terms and Conditions.')
       return
     }
-    if (!schoolName.trim() || !name.trim() || !phone.trim() || !email.includes('@') || !date || adults < 1) {
+    if (!schoolName.trim() || !name.trim() || !phone.trim() || !date || adults < 1) {
       setError('Please complete all required fields.')
       return
     }
@@ -54,7 +53,6 @@ export default function SchoolsPage() {
           schoolName: schoolName.trim(),
           contactName: name.trim(),
           contactPhone: phone.trim(),
-          contactEmail: email.trim(),
           studentCount: children,
           preferredDate: date,
           sessionType: sessionMode === 'exclusive' ? 'exclusive' : 'non-exclusive',
@@ -93,8 +91,8 @@ export default function SchoolsPage() {
             </p>
             <h2 className="mt-3 font-[family-name:var(--font-heading)] text-xl font-bold">Request sent</h2>
             {enquiryRef && <p className="mt-2 font-mono text-ls-yellow">{enquiryRef}</p>}
-            <p className="mt-2 text-sm text-white/70">We will contact you by email or phone.</p>
-            <DirectReachOut context="Need a tailored school package? Call / WhatsApp / Email us." />
+            <p className="mt-2 text-sm text-white/70">We will contact you by phone or WhatsApp.</p>
+            <DirectReachOut context="Need a tailored school package? Call or WhatsApp us." />
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
@@ -120,8 +118,6 @@ export default function SchoolsPage() {
             <input style={bookFieldStyle} value={name} onChange={e => setName(e.target.value)} />
             <FieldLabel>Phone *</FieldLabel>
             <input style={bookFieldStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
-            <FieldLabel>Email *</FieldLabel>
-            <input style={bookFieldStyle} type="email" value={email} onChange={e => setEmail(e.target.value)} />
             <FieldLabel>Date *</FieldLabel>
             <input
               style={bookFieldStyle}
@@ -159,7 +155,7 @@ export default function SchoolsPage() {
               onChange={e => setNotes(e.target.value)}
             />
 
-            <DirectReachOut context="Need a tailored school package? Call / WhatsApp / Email us." />
+            <DirectReachOut context="Need a tailored school package? Call or WhatsApp us." />
             <TermsGate visitType="school" checked={termsOk} onCheckedChange={setTermsOk} />
             {error && (
               <p className="mb-3 text-sm font-semibold text-red-300" role="alert" aria-live="polite">

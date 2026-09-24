@@ -16,7 +16,6 @@ export default function BirthdaysPage() {
   const [sessionMode, setSessionMode] = useState<'shared' | 'exclusive'>('shared')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
   const [date, setDate] = useState('')
   const [children, setChildren] = useState(MIN_CHILDREN)
   const [adults, setAdults] = useState(MIN_ADULTS)
@@ -35,7 +34,7 @@ export default function BirthdaysPage() {
       setError('Please read and accept the Terms and Conditions.')
       return
     }
-    if (!name.trim() || !phone.trim() || !email.includes('@') || !date) {
+    if (!name.trim() || !phone.trim() || !date) {
       setError('Please complete all required fields.')
       return
     }
@@ -59,7 +58,6 @@ export default function BirthdaysPage() {
         body: JSON.stringify({
           parentName: name.trim(),
           phone: phone.trim(),
-          email: email.trim(),
           guestCount: children + adults,
           preferredDate: date,
           sessionPreference: sessionMode === 'exclusive' ? 'exclusive' : 'non-exclusive',
@@ -124,8 +122,6 @@ export default function BirthdaysPage() {
             <input style={bookFieldStyle} value={name} onChange={e => setName(e.target.value)} />
             <FieldLabel>Phone *</FieldLabel>
             <input style={bookFieldStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
-            <FieldLabel>Email *</FieldLabel>
-            <input style={bookFieldStyle} type="email" value={email} onChange={e => setEmail(e.target.value)} />
             <FieldLabel>Date *</FieldLabel>
             <input
               style={bookFieldStyle}

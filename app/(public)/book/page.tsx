@@ -128,7 +128,6 @@ export default function BookPage() {
   const [partyModal, setPartyModal] = useState<Extract<PartyValidation, { ok: false }> | null>(null)
   const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
-  const [bookerEmail, setBookerEmail] = useState('')
   const [termsRead, setTermsRead] = useState(false)
   const [termsConsent, setTermsConsent] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -137,12 +136,10 @@ export default function BookPage() {
 
   // Birthday contact (parent / guardian)
   const [sessionMode, setSessionMode] = useState<'shared' | 'exclusive'>('shared')
-  const [birthdayEmail, setBirthdayEmail] = useState('')
   const [partyNotes, setPartyNotes] = useState('')
 
   // School
   const [schoolName, setSchoolName] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
   const [studentCount, setStudentCount] = useState(20)
   const [staffCount, setStaffCount] = useState(2)
 
@@ -176,11 +173,8 @@ export default function BookPage() {
     setError('')
     setTermsRead(false)
     setTermsConsent(false)
-    // Keep date/slot; reset only type-specific fields
-    setBirthdayEmail('')
     setPartyNotes('')
     setSchoolName('')
-    setContactEmail('')
     setStudentCount(20)
     setStaffCount(2)
     if (next === 'school') {
@@ -554,17 +548,6 @@ export default function BookPage() {
           setLoading(false)
           return
         }
-        if (!birthdayEmail.trim() || !birthdayEmail.includes('@')) {
-          setError('Enter a valid parent / guardian email.')
-          setLoading(false)
-          return
-        }
-      }
-
-      if (visitType === 'general' && bookerEmail.trim() && !bookerEmail.includes('@')) {
-        setError('Enter a valid email, or leave it blank — your QR opens on this phone after payment.')
-        setLoading(false)
-        return
       }
 
       const bookerName =
@@ -574,7 +557,6 @@ export default function BookPage() {
         visitType === 'birthday'
           ? {
               guardianName: name,
-              email: birthdayEmail.trim(),
               phone,
               notes: partyNotes || null,
               sessionMode: 'shared',
@@ -582,15 +564,12 @@ export default function BookPage() {
           : visitType === 'school'
             ? {
                 schoolName,
-                contactEmail: contactEmail || null,
                 studentCount,
                 staffCount,
                 notes: partyNotes || null,
                 sessionMode: 'shared',
               }
-            : bookerEmail.trim()
-              ? { email: bookerEmail.trim() }
-              : null
+            : null
 
       const res = await fetch('/api/mpesa/initiate', {
         method: 'POST',
@@ -599,7 +578,6 @@ export default function BookPage() {
           sessionId,
           phone,
           name: bookerName,
-          email: visitType === 'birthday' ? birthdayEmail.trim() : bookerEmail.trim() || undefined,
           adultCount,
           childCount,
           infantCount,
@@ -683,8 +661,8 @@ export default function BookPage() {
     setLoading(true)
     try {
       if (visitType === 'birthday') {
-        if (!name.trim() || !phone.trim() || !birthdayEmail.trim() || !selectedDate) {
-          throw new Error('Please fill in parent / guardian name, phone, email, and date.')
+        if (!name.trim() || !phone.trim() || !selectedDate) {
+          throw new Error('Please fill in parent / guardian name, phone, and date.')
         }
         const guestCount = Math.max(1, adults + childrenPaid + childrenFreeUnder95)
         const res = await fetch('/api/birthdays/enquiry', {
@@ -693,7 +671,6 @@ export default function BookPage() {
           body: JSON.stringify({
             parentName: name,
             phone,
-            email: birthdayEmail.trim(),
             guestCount,
             preferredDate: selectedDate,
             sessionPreference: sessionMode === 'exclusive' ? 'exclusive' : 'non-exclusive',
@@ -715,8 +692,8 @@ export default function BookPage() {
       }
 
       if (visitType === 'school') {
-        if (!schoolName.trim() || !name.trim() || !phone.trim() || !contactEmail.trim() || !selectedDate) {
-          throw new Error('Please fill in school name, contact details, email, phone, and date.')
+        if (!schoolName.trim() || !name.trim() || !phone.trim() || !selectedDate) {
+          throw new Error('Please fill in school name, contact name, phone, and date.')
         }
         if (studentCount < 20) throw new Error('School trips need at least 20 students.')
         const res = await fetch('/api/schools/enquiry', {
@@ -726,7 +703,6 @@ export default function BookPage() {
             schoolName,
             contactName: name,
             contactPhone: phone,
-            contactEmail,
             studentCount,
             preferredDate: selectedDate,
             sessionType: sessionMode === 'exclusive' ? 'exclusive' : 'non-exclusive',
@@ -1410,8 +1386,8 @@ export default function BookPage() {
                     <DirectReachOut
                       context={
                         visitType === 'school'
-                          ? 'Need a tailored school package? Call / WhatsApp / Email us.'
-                          : 'Need a tailored birthday package? Call / WhatsApp / Email us.'
+                          ? 'Need a tailored school package? Call or WhatsApp us.'
+                          : 'Need a tailored birthday package? Call or WhatsApp us.'
                       }
                       presetMessage={
                         visitType === 'school'
@@ -1440,16 +1416,6 @@ export default function BookPage() {
                           onChange={e => setPhone(e.target.value)}
                           placeholder="e.g. 0700 101 425"
                           type="tel"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>Email *</FieldLabel>
-                        <input
-                          style={bookFieldStyle}
-                          value={birthdayEmail}
-                          onChange={e => setBirthdayEmail(e.target.value)}
-                          placeholder="name@email.com"
-                          type="email"
                         />
                       </div>
                     </div>
@@ -1496,16 +1462,6 @@ export default function BookPage() {
                           value={name}
                           onChange={e => setName(e.target.value)}
                           placeholder="Teacher / coordinator"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>Email *</FieldLabel>
-                        <input
-                          style={bookFieldStyle}
-                          value={contactEmail}
-                          onChange={e => setContactEmail(e.target.value)}
-                          placeholder="school@email.com"
-                          type="email"
                         />
                       </div>
                     </div>
@@ -1736,17 +1692,6 @@ export default function BookPage() {
                         />
                         <input
                           className="inp"
-                          placeholder="Email for ticket copy (optional)"
-                          value={bookerEmail}
-                          onChange={e => setBookerEmail(e.target.value)}
-                          type="email"
-                          autoComplete="email"
-                        />
-                        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, lineHeight: 1.45 }}>
-                          No email needed — after M-Pesa confirms, your QR opens on this screen. Save the booking link or screenshot it.
-                        </p>
-                        <input
-                          className="inp"
                           placeholder="M-Pesa number e.g. 0700 101 425"
                           value={phone}
                           onChange={e => setPhone(e.target.value)}
@@ -1826,12 +1771,6 @@ export default function BookPage() {
                       <span>{name}</span>
                     </div>
                   )}
-                  {visitType === 'birthday' && birthdayEmail && (
-                    <div className="sum-row">
-                      <span>Email</span>
-                      <span>{birthdayEmail}</span>
-                    </div>
-                  )}
                   {visitType === 'school' && (
                     <div className="sum-row">
                       <span>School</span>
@@ -1909,30 +1848,6 @@ export default function BookPage() {
                   value={name}
                   onChange={e => setName(e.target.value)}
                 />
-                {visitType === 'birthday' && (
-                  <input
-                    className="inp"
-                    placeholder="Parent / guardian email *"
-                    value={birthdayEmail}
-                    onChange={e => setBirthdayEmail(e.target.value)}
-                    type="email"
-                  />
-                )}
-                {visitType === 'general' && (
-                  <>
-                    <input
-                      className="inp"
-                      placeholder="Email for ticket copy (optional)"
-                      value={bookerEmail}
-                      onChange={e => setBookerEmail(e.target.value)}
-                      type="email"
-                      autoComplete="email"
-                    />
-                    <p style={{ margin: '0 0 10px', fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, lineHeight: 1.45 }}>
-                      No email needed — QR opens here after payment. Staff can also open the ticket from Admin with your booking ref.
-                    </p>
-                  </>
-                )}
                 <input
                   className="inp"
                   placeholder="M-Pesa number e.g. 0700 101 425"

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { sendInfoEmail, sendGuestEmail } from '@/lib/email'
+import { sendInfoEmail } from '@/lib/email'
 import { BIRTHDAY_FOOD_NOTICE } from '@/lib/pricing'
 import { sanitizeGuestError } from '@/lib/guest-errors'
 import { isValidKenyaPhone } from '@/lib/phone'
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       parentName,
-      email,
       guestCount,
       preferredDate,
       sessionPreference,
@@ -29,13 +28,8 @@ export async function POST(req: NextRequest) {
       phone,
     } = body as Record<string, unknown>
 
-    if (!parentName || !guestCount || !preferredDate || !sessionPreference || !phone || !email) {
+    if (!parentName || !guestCount || !preferredDate || !sessionPreference || !phone) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
-
-    const emailStr = String(email).trim()
-    if (!emailStr.includes('@')) {
-      return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
     }
 
     if (!isValidKenyaPhone(String(phone))) {
@@ -45,7 +39,6 @@ export async function POST(req: NextRequest) {
     const enquiryRef = makeRef()
 
     const notes = [
-      `Guardian email: ${emailStr}`,
       BIRTHDAY_FOOD_NOTICE,
       specialRequirements ? String(specialRequirements) : '',
     ]
@@ -76,7 +69,6 @@ export async function POST(req: NextRequest) {
       `Enquiry ref: ${enquiryRef}`,
       `Parent / guardian: ${payload.parent_name}`,
       `Phone: ${payload.phone}`,
-      `Email: ${emailStr}`,
       `Number of guests: ${payload.guest_count}`,
       `Preferred date: ${payload.preferred_date}`,
       `Session preference: ${payload.session_preference}`,
@@ -90,25 +82,6 @@ export async function POST(req: NextRequest) {
         String(payload.special_requirements || '').includes('CUSTOMIZED PLAN') ? ' — CUSTOM PLAN' : ''
       }`,
       text,
-    })
-
-    await sendGuestEmail({
-      to: emailStr,
-      subject: `Little Scientist birthday enquiry — ${enquiryRef}`,
-      text: [
-        `Hi ${payload.parent_name},`,
-        '',
-        'Thank you — we received your birthday party enquiry.',
-        '',
-        `Reference: ${enquiryRef}`,
-        `Preferred date: ${payload.preferred_date}`,
-        `Guests: ${payload.guest_count}`,
-        '',
-        'Our team will contact you by email or phone.',
-        '',
-        '— Little Scientist',
-        '0700 101 425 · info@littlescientist.ke',
-      ].join('\n'),
     })
 
     return NextResponse.json({ success: true, enquiryRef })

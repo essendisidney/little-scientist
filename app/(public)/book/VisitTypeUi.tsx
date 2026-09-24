@@ -154,7 +154,7 @@ export function EnquirySuccess({ title, enquiryRef }: { title: string; enquiryRe
         </div>
       ) : null}
       <DirectReachOut
-        context="Need a tailored birthday package? Call / WhatsApp / Email us."
+        context="Need a tailored birthday package? Call or WhatsApp us."
         presetMessage="Hi Little Scientist — I just submitted an enquiry and would like to discuss details."
       />
     </div>
@@ -163,17 +163,15 @@ export function EnquirySuccess({ title, enquiryRef }: { title: string; enquiryRe
 
 const REACH_PHONE_DISPLAY = '0700 101 425'
 const REACH_PHONE_E164 = '254700101425'
-const REACH_EMAIL = 'info@littlescientist.ke'
 
 export function DirectReachOut({
-  context = 'Need a tailored birthday package? Call / WhatsApp / Email us.',
+  context = 'Need a tailored birthday package? Call or WhatsApp us.',
   presetMessage = 'Hi Little Scientist — I would like a birthday/school plan.',
 }: {
   context?: string
   presetMessage?: string
 }) {
   const wa = `https://wa.me/${REACH_PHONE_E164}?text=${encodeURIComponent(presetMessage)}`
-  const mail = `mailto:${REACH_EMAIL}?subject=${encodeURIComponent('Booking enquiry')}&body=${encodeURIComponent(presetMessage)}`
   const linkStyle: CSSProperties = {
     flex: 1,
     minWidth: 100,
@@ -222,12 +220,6 @@ export function DirectReachOut({
           WhatsApp
           <div style={{ fontWeight: 500, fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
             {REACH_PHONE_DISPLAY}
-          </div>
-        </a>
-        <a href={mail} style={linkStyle}>
-          Email
-          <div style={{ fontWeight: 500, fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
-            {REACH_EMAIL}
           </div>
         </a>
       </div>

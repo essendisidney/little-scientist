@@ -70,20 +70,8 @@ export async function POST(req: NextRequest) {
     const RETRYABLE = new Set(['pending', 'processing', 'failed', 'cancelled', 'canceled', 'timeout', 'expired'])
 
     if (bookingKind === 'birthday') {
-      const email = String((partyMeta as { email?: string } | null)?.email || body?.email || '').trim()
       if (!name?.trim()) {
         return NextResponse.json({ error: 'Enter the parent / guardian name.' }, { status: 400 })
-      }
-      if (!email || !email.includes('@')) {
-        return NextResponse.json({ error: 'Enter a valid parent / guardian email.' }, { status: 400 })
-      }
-    }
-
-    // General visits: email is optional — QR is shown on /ticket/{ref} after payment.
-    if (bookingKind === 'general') {
-      const email = String((partyMeta as { email?: string } | null)?.email || body?.email || '').trim()
-      if (email && !email.includes('@')) {
-        return NextResponse.json({ error: 'Enter a valid email, or leave it blank.' }, { status: 400 })
       }
     }
 
