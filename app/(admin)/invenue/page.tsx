@@ -426,14 +426,14 @@ export default function InVenuePage() {
               {lookupMode === 'manual' && (
                 <div>
                   <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 14, fontWeight: 700 }}>
-                    Booking ref (LST-…), ticket QR, or M-Pesa receipt
+                    Booking ref, ticket QR, or M-Pesa receipt
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <input
                       value={ref}
                       onChange={e => setRef(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && lookupBooking(ref)}
-                      placeholder="LST-… or M-Pesa receipt"
+                      placeholder="Booking ref or M-Pesa receipt"
                       style={{
                         ...S,
                         marginBottom: 0,

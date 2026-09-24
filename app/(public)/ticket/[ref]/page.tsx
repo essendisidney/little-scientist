@@ -2,7 +2,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
 import QRCode from 'react-qr-code'
-import { computeBasket, DEFAULT_TIERS, BIRTHDAY_PRICING } from '@/lib/pricing'
+import { supabase } from '@/lib/supabase'
+import { computeBasket, DEFAULT_TIERS, type PriceTier } from '@/lib/pricing'
 
 type Booking = {
   id: string
@@ -42,6 +43,37 @@ export default function TicketPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pendingPayment, setPendingPayment] = useState(false)
+  const [liveTiers, setLiveTiers] = useState<PriceTier[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    supabase
+      .from('pricing_tiers')
+      .select('key, price_kes, free')
+      .eq('active', true)
+      .then(({ data }) => {
+        if (!alive || !data?.length) return
+        const rows = data as { key: string; price_kes: number; free: boolean }[]
+        const byKey = (k: string) => rows.find(r => r.key === k)
+        const apply = (key: string, fallback: PriceTier) => {
+          const row = byKey(key)
+          if (!row) return fallback
+          const price = Number(row.price_kes)
+          return { ...fallback, priceInclVat: Number.isFinite(price) ? price : fallback.priceInclVat, free: Boolean(row.free) || price <= 0 }
+        }
+        setLiveTiers([
+          apply('adult', DEFAULT_TIERS[0]),
+          apply('child', DEFAULT_TIERS[1]),
+          apply('infant', DEFAULT_TIERS[2]),
+          apply('birthday_adult', { ...DEFAULT_TIERS[0], key: 'birthday_adult', priceInclVat: 1500 }),
+          apply('birthday_child', { ...DEFAULT_TIERS[1], key: 'birthday_child', priceInclVat: 1500 }),
+          apply('birthday_infant', { ...DEFAULT_TIERS[2], key: 'birthday_infant', priceInclVat: 800, free: false }),
+        ])
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   function Wrap({ children, right }: { children: ReactNode; right?: ReactNode }) {
     return (
@@ -322,20 +354,18 @@ export default function TicketPage() {
   const session = booking?.sessions as { session_date: string; time_slot: string }
   const infantCount = Number(booking?.infant_count || 0)
   const isBirthday = booking?.booking_kind === 'birthday'
+  const priced = liveTiers || DEFAULT_TIERS
   const receiptTiers = isBirthday
-    ? DEFAULT_TIERS.map(t =>
-        t.key === 'infant'
-          ? { ...t, priceInclVat: BIRTHDAY_PRICING.childUnder95cmKes, free: false, sublabel: 'Under 95cm — birthday rate' }
-          : t.key === 'adult'
-            ? { ...t, priceInclVat: BIRTHDAY_PRICING.adult18PlusKes }
-            : t.key === 'child'
-              ? { ...t, priceInclVat: BIRTHDAY_PRICING.child95cmTo17Kes }
-              : t,
-      )
-    : DEFAULT_TIERS
+    ? (['adult', 'child', 'infant'] as const).map(key => {
+        const birthday = priced.find(t => t.key === `birthday_${key}`)
+        const general = priced.find(t => t.key === key) || DEFAULT_TIERS.find(t => t.key === key)!
+        return { ...(birthday || general), key }
+      })
+    : priced.filter(t => t.key === 'adult' || t.key === 'child' || t.key === 'infant')
   const basket = booking
     ? computeBasket(booking.adult_count, booking.child_count, receiptTiers, infantCount)
     : null
+  const linesMatchReceipt = basket != null && Math.abs(basket.grandTotal - Number(booking?.total_amount_kes || 0)) < 1
   const receiptTotal = booking ? Number(booking.total_amount_kes) : 0
   const ticketUrl =
     typeof window !== 'undefined' && booking
@@ -521,13 +551,16 @@ export default function TicketPage() {
         <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500, fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em', marginBottom: 12 }}>
             🧾 Receipt
           </div>
-          {[
-            { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
-            { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
-            ...(infantCount > 0
-              ? [{ label: `Entry fee — Under 95cm × ${infantCount}`, amount: basket.infantTotal }]
-              : []),
-          ]
+          {(linesMatchReceipt
+            ? [
+                { label: `Entry fee — Adults × ${booking.adult_count}`, amount: basket.adultTotal },
+                { label: `Entry fee — Children × ${booking.child_count}`, amount: basket.childTotal },
+                ...(infantCount > 0
+                  ? [{ label: `Entry fee — Under 95cm × ${infantCount}`, amount: basket.infantTotal }]
+                  : []),
+              ]
+            : [{ label: 'Entry fees', amount: receiptTotal }]
+          )
             .filter(i => i.amount > 0)
             .map(item => (
               <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 8, fontWeight: 600, lineHeight: 1.65 }}>
@@ -542,9 +575,9 @@ export default function TicketPage() {
                 KES {receiptTotal.toLocaleString('en-KE')}
               </span>
             </div>
-            {basket.infantPrice <= 0 && (
+            {infantCount > 0 && basket.infantTotal <= 0 && linesMatchReceipt && (
               <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.45)', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 400, lineHeight: 1.7, maxWidth: 600 }}>
-                Children 94.9cm and below enter FREE (not ticketed). Please inform gate staff for height checks.
+                Under 95cm visitors are included at no extra charge. Show their QR at the gate.
               </div>
             )}
           </div>
@@ -578,6 +611,8 @@ export default function TicketPage() {
         {tickets.map(ticket => {
           const type = String(ticket.ticket_type || '')
           const isAdult = /adult/i.test(type)
+          const isUnder95 = /under\s*95|infant/i.test(type)
+          const badgeLabel = isUnder95 ? 'Under 95cm' : isAdult ? 'Adult' : 'Child'
           const badgeBg = isAdult ? 'rgba(46,142,255,0.18)' : 'rgba(160,96,255,0.18)'
           const badgeColor = isAdult ? '#2e8eff' : '#a060ff'
           const badgeBorder = isAdult ? 'rgba(46,142,255,0.35)' : 'rgba(160,96,255,0.35)'
@@ -585,7 +620,7 @@ export default function TicketPage() {
             <div key={ticket.id} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${ticket.is_used ? 'rgba(248,113,113,0.28)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 16, padding: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 12px', borderRadius: 999, background: badgeBg, border: `1px solid ${badgeBorder}`, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, letterSpacing: '-0.01em', color: badgeColor, fontSize: 13 }}>
-                  {isAdult ? 'Adult' : 'Child'}
+                  {badgeLabel}
                 </span>
                 {ticket.is_used && (
                   <span style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.28)', color: '#f87171', borderRadius: 999, padding: '6px 10px', fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, letterSpacing: '0.01em', fontSize: 12 }}>

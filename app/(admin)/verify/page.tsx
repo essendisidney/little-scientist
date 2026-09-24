@@ -409,7 +409,7 @@ export default function VerifyPage() {
                 value={manualRef}
                 onChange={e => setManualRef(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleScan(manualRef)}
-                placeholder="QR code or booking ref (LST-…)"
+                placeholder="QR code or booking ref"
                 style={{
                   flex: 1,
                   background: 'rgba(255,255,255,0.06)',

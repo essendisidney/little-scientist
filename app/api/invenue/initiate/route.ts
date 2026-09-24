@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          'Booking not found. Try booking ref (LST-…), ticket QR, or M-Pesa receipt. For walk-up merch, use Walk-up sale.',
+          'Booking not found. Try the booking ref (for example 07C0C7D7), ticket QR, or M-Pesa receipt. For walk-up merch, use Walk-up sale.',
       },
       { status: 404 },
     )
