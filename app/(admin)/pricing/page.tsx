@@ -18,6 +18,18 @@ type PriceTier = {
 
 const VAT_RATE = 0.16
 
+const TIER_ORDER = ['adult', 'child', 'infant', 'birthday_adult', 'birthday_child', 'birthday_infant']
+
+function tierEmoji(key: string) {
+  if (key === 'adult' || key.endsWith('_adult')) return '🧑'
+  if (key === 'child' || key.endsWith('_child')) return '👧'
+  return '👶'
+}
+
+function tierGroup(key: string) {
+  return key.startsWith('birthday') ? 'Birthday' : 'General visit'
+}
+
 function vatBreakdown(inclPrice: number) {
   const excl = inclPrice / (1 + VAT_RATE)
   const vat = inclPrice - excl
@@ -145,7 +157,7 @@ export default function PricingAdminPage() {
             💰 Ticket Pricing
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-            Edit Adult, Child, and Under-95cm (infant) prices. Set infant to 0 for free general entry; set a price for birthday paid under-95cm.
+            General visit prices are separate from birthday prices. Set general under-95cm to 0 for free entry. Birthday under-95cm is its own price.
           </div>
         </div>
 
@@ -191,13 +203,19 @@ export default function PricingAdminPage() {
               No pricing rows yet. Apply migration 016 (`pricing_tiers`) then refresh.
             </div>
           ) : (
-            tiers.map((tier) => {
+            [...tiers]
+              .sort((a, b) => {
+                const ia = TIER_ORDER.indexOf(a.key)
+                const ib = TIER_ORDER.indexOf(b.key)
+                return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
+              })
+              .map((tier) => {
               const currentPrice = editing[tier.id] ?? tier.price_kes
               const vat = vatBreakdown(currentPrice)
               const isDirty = editing[tier.id] !== undefined && editing[tier.id] !== tier.price_kes
               const isSaving = saving === tier.id
               const isSaved = saved === tier.id
-              const emoji = tier.key === 'adult' ? '🧑' : tier.key === 'child' ? '👧' : '👶'
+              const emoji = tierEmoji(tier.key)
 
               return (
                 <div
@@ -211,6 +229,9 @@ export default function PricingAdminPage() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
+                      <div style={{ fontSize: 11, color: '#FFD700', fontWeight: 800, letterSpacing: '0.04em', marginBottom: 4 }}>
+                        {tierGroup(tier.key)}
+                      </div>
                       <div style={{ fontFamily: "'Fredoka One',cursive", fontSize: 20, marginBottom: 4 }}>
                         {emoji} {tier.label}
                       </div>

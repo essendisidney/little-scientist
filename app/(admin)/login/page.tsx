@@ -25,7 +25,13 @@ export default function LoginPage() {
       data.user?.user_metadata?.role ??
       data.user?.app_metadata?.roles?.[0] ??
       data.user?.user_metadata?.roles?.[0]
-    const role = typeof raw === 'string' ? raw.toLowerCase() : 'admin'
+    const role = typeof raw === 'string' ? raw.toLowerCase() : ''
+    if (role !== 'admin' && role !== 'gate' && role !== 'counter' && role !== 'accounting') {
+      await supabase.auth.signOut()
+      setError('This account has no staff role. Ask an admin to assign one.')
+      setLoading(false)
+      return
+    }
     const dest =
       role === 'gate'
         ? '/admin/verify'
