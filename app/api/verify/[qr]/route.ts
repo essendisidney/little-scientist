@@ -208,6 +208,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ qr:
         bookerName: booking.booker_name,
         adultCount: booking.adult_count,
         childCount: booking.child_count,
+        infantCount: Number(booking.infant_count || 0),
       },
     })
   } catch (err) {

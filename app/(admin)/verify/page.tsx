@@ -12,6 +12,7 @@ type Result = {
     bookerName: string | null
     adultCount: number
     childCount: number
+    infantCount?: number
   }
 }
 
@@ -24,6 +25,7 @@ type OfflineTicket = {
   bookerName: string | null
   adultCount: number
   childCount: number
+  infantCount?: number
   sessionDate: string | null
   timeSlot: string | null
 }
@@ -238,6 +240,7 @@ export default function VerifyPage() {
               bookerName: t.bookerName,
               adultCount: t.adultCount,
               childCount: t.childCount,
+              infantCount: t.infantCount,
             },
           })
         }
@@ -347,6 +350,7 @@ export default function VerifyPage() {
                 {result.ticket.bookerName && <div>{result.ticket.bookerName}</div>}
                 <div>
                   {result.ticket.adultCount}A · {result.ticket.childCount}C
+                  {(result.ticket.infantCount || 0) > 0 ? ` · ${result.ticket.infantCount} under 95cm` : ''}
                 </div>
               </div>
             )}
