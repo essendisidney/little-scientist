@@ -1538,8 +1538,7 @@ export default function BookPage({
                   <>
                     {visitType === 'general' && infantIsFree && (
                       <div className="warn" style={{ background: 'rgba(255,217,74,0.07)' }}>
-                        👶🏾 Children <strong>94.9cm and below</strong> enter <strong>FREE</strong> — no ticket needed.
-                        Please inform gate staff.
+                        Children <strong>94.9cm and below</strong> enter <strong>FREE</strong>. A gate QR is still issued. Show it at the gate.
                       </div>
                     )}
 
