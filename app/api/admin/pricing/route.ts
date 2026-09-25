@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest) {
       entity: 'pricing_tiers',
       entity_id: data.id,
       performed_by: auth.staffId,
-      metadata: update,
+      metadata: { ...update, key: data.key },
     })
 
     return NextResponse.json({ ok: true, tier: data })
