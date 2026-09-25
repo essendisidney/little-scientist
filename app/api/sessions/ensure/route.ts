@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaffOrCron } from '@/lib/admin-auth'
+import { todayInNairobi } from '@/lib/dates'
 
 const HOURLY_SLOTS = [
   '09:00-11:00',
@@ -19,6 +20,7 @@ type SessionRow = {
   capacity: number
   booked_count: number
   held_count?: number
+  pending_count?: number
   is_blocked: boolean
 }
 
@@ -26,10 +28,19 @@ function isDateKey(s: unknown): s is string {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 }
 
+/** Guest seeding uses the Nairobi calendar, not the UTC date. */
+function guestSeedWindow() {
+  const minKey = todayInNairobi()
+  const [y, m, d] = minKey.split('-').map(Number)
+  const max = new Date(Date.UTC(y, (m || 1) - 1, d || 1))
+  max.setUTCDate(max.getUTCDate() + 14)
+  return { minKey, maxKey: max.toISOString().slice(0, 10) }
+}
+
 async function ensureOneDate(sessionDate: string) {
   const { data: existing, error: existingErr } = await supabaseAdmin
     .from('sessions')
-    .select('id, session_date, time_slot, capacity, booked_count, held_count, is_blocked')
+    .select('id, session_date, time_slot, capacity, booked_count, held_count, pending_count, is_blocked')
     .eq('session_date', sessionDate)
 
   if (existingErr) throw new Error('Failed to check sessions.')
@@ -78,11 +89,7 @@ export async function POST(req: NextRequest) {
       const unique = [...new Set(sessionDates as string[])].slice(0, 14)
       // Without auth, only allow seeding dates within the next 14 calendar days.
       if (!authHeader) {
-        const today = new Date()
-        const max = new Date(today)
-        max.setDate(max.getDate() + 14)
-        const minKey = today.toISOString().slice(0, 10)
-        const maxKey = max.toISOString().slice(0, 10)
+        const { minKey, maxKey } = guestSeedWindow()
         for (const d of unique) {
           if (d < minKey || d > maxKey) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -104,11 +111,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!authHeader) {
-      const today = new Date()
-      const max = new Date(today)
-      max.setDate(max.getDate() + 14)
-      const minKey = today.toISOString().slice(0, 10)
-      const maxKey = max.toISOString().slice(0, 10)
+      const { minKey, maxKey } = guestSeedWindow()
       if (sessionDate < minKey || sessionDate > maxKey) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
