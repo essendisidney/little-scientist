@@ -28,8 +28,7 @@ export default function Footer() {
         </nav>
       </div>
       <p className="mx-auto mt-8 max-w-5xl text-xs font-medium text-white/35">
-        © {new Date().getFullYear()} Little Scientist. Not affiliated with any social media platforms or other
-        websites.
+        © {new Date().getFullYear()} Little Scientist.
       </p>
     </footer>
   )

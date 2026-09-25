@@ -5,7 +5,7 @@ import Link from 'next/link'
 import WatermarkBg from '@/components/portal/WatermarkBg'
 import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
-import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo } from '../book/VisitTypeUi'
+import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo, venueWhatsAppUrl } from '../book/VisitTypeUi'
 import { toLocalDateKey } from '@/lib/dates'
 import { isValidKenyaPhone } from '@/lib/phone'
 
@@ -23,6 +23,7 @@ export default function SchoolsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [enquiryRef, setEnquiryRef] = useState('')
+  const [whatsAppUrl, setWhatsAppUrl] = useState('')
 
   const minDate = useMemo(() => toLocalDateKey(), [])
 
@@ -44,6 +45,10 @@ export default function SchoolsPage() {
       setError('School trips require a minimum of 20 students.')
       return
     }
+    if (date < minDate) {
+      setError('Choose today or any later date for the school trip.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/schools/enquiry', {
@@ -61,7 +66,25 @@ export default function SchoolsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send')
-      setEnquiryRef(String(data.enquiryRef || ''))
+      const ref = String(data.enquiryRef || '')
+      setEnquiryRef(ref)
+      const wa = venueWhatsAppUrl(
+        [
+          `School trip request ${ref}`,
+          `School: ${schoolName.trim()}`,
+          `Contact: ${name.trim()}`,
+          `Phone: ${phone.trim()}`,
+          `Date of school trip: ${date}`,
+          `Students: ${children}`,
+          `Adults: ${adults}`,
+          sessionMode === 'exclusive' ? 'Exclusive session' : 'Shared session',
+          notes.trim() ? `Notes: ${notes.trim()}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      )
+      setWhatsAppUrl(wa)
+      window.open(wa, '_blank', 'noopener,noreferrer')
       setSuccess(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -91,7 +114,19 @@ export default function SchoolsPage() {
             </p>
             <h2 className="mt-3 font-[family-name:var(--font-heading)] text-xl font-bold">Request sent</h2>
             {enquiryRef && <p className="mt-2 font-mono text-ls-yellow">{enquiryRef}</p>}
-            <p className="mt-2 text-sm text-white/70">We will contact you by phone or WhatsApp.</p>
+            <p className="mt-2 text-sm text-white/70">
+              Sent to info@littlescientist.ke. Send the same request on WhatsApp so the team gets it there too.
+            </p>
+            {whatsAppUrl && (
+              <a
+                href={whatsAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex rounded-xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-[#07132D]"
+              >
+                Send on WhatsApp
+              </a>
+            )}
             <DirectReachOut context="Need a tailored school package? Call or WhatsApp us." />
           </div>
         ) : (
@@ -113,12 +148,12 @@ export default function SchoolsPage() {
             />
 
             <FieldLabel>School name *</FieldLabel>
-            <input style={bookFieldStyle} value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="e.g. Greenfield Academy" />
+            <input style={bookFieldStyle} value={schoolName} onChange={e => setSchoolName(e.target.value)} />
             <FieldLabel>Contact person (adult) *</FieldLabel>
             <input style={bookFieldStyle} value={name} onChange={e => setName(e.target.value)} />
             <FieldLabel>Phone *</FieldLabel>
             <input style={bookFieldStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
-            <FieldLabel>Date *</FieldLabel>
+            <FieldLabel>Date of school trip *</FieldLabel>
             <input
               style={bookFieldStyle}
               type="date"

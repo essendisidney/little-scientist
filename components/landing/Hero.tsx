@@ -5,6 +5,9 @@ import Disclaimers from '@/components/portal/Disclaimers'
 export default function Hero() {
   return (
     <section className="relative px-4 pb-10 pt-28 sm:px-6 sm:pt-32">
+      <p className="mx-auto mb-4 max-w-5xl text-center text-sm font-semibold text-white/80">
+        Not affiliated with any social media platforms or other websites.
+      </p>
       <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-white/10">
         <div className="relative min-h-[280px] sm:min-h-[340px]">
           <Image

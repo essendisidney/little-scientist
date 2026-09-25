@@ -662,8 +662,6 @@ export default function TicketPage() {
           🎟️ Tickets sold are not refundable or transferable.
           <br />
           🚫 Little Scientist is a drug and alcohol free environment.
-          <br />
-          🔒 Beware of fraudulent accounts claiming to represent us.
         </div>
       </div>
     </Wrap>

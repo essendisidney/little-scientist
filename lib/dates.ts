@@ -15,3 +15,8 @@ export function todayInNairobi(d = new Date()): string {
     day: '2-digit',
   }).format(d)
 }
+
+/** True for today or any later calendar day in Nairobi. No upper limit. */
+export function isOnOrAfterNairobiToday(dateKey: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && dateKey >= todayInNairobi()
+}

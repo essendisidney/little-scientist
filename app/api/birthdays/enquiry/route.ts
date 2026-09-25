@@ -4,6 +4,7 @@ import { sendInfoEmail } from '@/lib/email'
 import { BIRTHDAY_FOOD_NOTICE } from '@/lib/pricing'
 import { sanitizeGuestError } from '@/lib/guest-errors'
 import { isValidKenyaPhone } from '@/lib/phone'
+import { isOnOrAfterNairobiToday } from '@/lib/dates'
 import { rateLimit } from '@/lib/rate-limit'
 
 function makeRef() {
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest) {
 
     if (!isValidKenyaPhone(String(phone))) {
       return NextResponse.json({ error: 'Enter a valid Kenyan mobile number.' }, { status: 400 })
+    }
+
+    if (!isOnOrAfterNairobiToday(String(preferredDate))) {
+      return NextResponse.json({ error: 'Choose today or any later date for the birthday party.' }, { status: 400 })
     }
 
     const enquiryRef = makeRef()

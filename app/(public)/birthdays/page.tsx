@@ -1,14 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import WatermarkBg from '@/components/portal/WatermarkBg'
 import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
-import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo } from '../book/VisitTypeUi'
+import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo, venueWhatsAppUrl } from '../book/VisitTypeUi'
 import { toLocalDateKey } from '@/lib/dates'
 import { isValidKenyaPhone } from '@/lib/phone'
-import { supabase } from '@/lib/supabase'
 
 const MIN_CHILDREN = 1
 const MIN_ADULTS = 1
@@ -26,33 +25,9 @@ export default function BirthdaysPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [enquiryRef, setEnquiryRef] = useState('')
-  const [rates, setRates] = useState({ adult: 1500, child: 1500, infant: 800 })
+  const [whatsAppUrl, setWhatsAppUrl] = useState('')
 
   const minDate = useMemo(() => toLocalDateKey(), [])
-
-  useEffect(() => {
-    let alive = true
-    supabase
-      .from('pricing_tiers')
-      .select('key, price_kes')
-      .eq('active', true)
-      .then(({ data }) => {
-        if (!alive || !data?.length) return
-        const price = (key: string, fallback: number) => {
-          const row = data.find(t => t.key === key)
-          const n = Number(row?.price_kes)
-          return Number.isFinite(n) ? n : fallback
-        }
-        setRates({
-          adult: price('birthday_adult', 1500),
-          child: price('birthday_child', 1500),
-          infant: price('birthday_infant', 800),
-        })
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
 
   async function submit() {
     setError('')
@@ -76,6 +51,10 @@ export default function BirthdaysPage() {
       setError(`Birthday bookings require a minimum of ${MIN_ADULTS} adults.`)
       return
     }
+    if (date < minDate) {
+      setError('Choose today or any later date for the birthday party.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/birthdays/enquiry', {
@@ -94,7 +73,24 @@ export default function BirthdaysPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send')
-      setEnquiryRef(String(data.enquiryRef || ''))
+      const ref = String(data.enquiryRef || '')
+      setEnquiryRef(ref)
+      const wa = venueWhatsAppUrl(
+        [
+          `Birthday party request ${ref}`,
+          `Name: ${name.trim()}`,
+          `Phone: ${phone.trim()}`,
+          `Date of birthday party: ${date}`,
+          `Children: ${children}`,
+          `Adults: ${adults}`,
+          sessionMode === 'exclusive' ? 'Exclusive session' : 'Shared session',
+          notes.trim() ? `Notes: ${notes.trim()}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      )
+      setWhatsAppUrl(wa)
+      window.open(wa, '_blank', 'noopener,noreferrer')
       setSuccess(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -124,14 +120,27 @@ export default function BirthdaysPage() {
             </p>
             <h2 className="mt-3 font-[family-name:var(--font-heading)] text-xl font-bold">Request sent</h2>
             {enquiryRef && <p className="mt-2 font-mono text-ls-yellow">{enquiryRef}</p>}
+            <p className="mt-2 text-sm text-white/70">
+              Sent to info@littlescientist.ke. Send the same request on WhatsApp so the team gets it there too.
+            </p>
+            {whatsAppUrl && (
+              <a
+                href={whatsAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex rounded-xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-[#07132D]"
+              >
+                Send on WhatsApp
+              </a>
+            )}
             <DirectReachOut />
           </div>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6">
             <p className="mb-4 text-sm font-semibold text-white/70">
-              Birthday rates: adults KES {rates.adult.toLocaleString('en-KE')}, children KES{' '}
-              {rates.child.toLocaleString('en-KE')}, under 95cm KES {rates.infant.toLocaleString('en-KE')}. This form
-              sends a request — we confirm by phone or WhatsApp.
+              Birthday rates apply.
+              <br />
+              This form sends a request. We confirm by phone or whatsapp.
             </p>
             <FieldLabel>Session type</FieldLabel>
             <SegmentedTwo
@@ -153,7 +162,7 @@ export default function BirthdaysPage() {
             <input style={bookFieldStyle} value={name} onChange={e => setName(e.target.value)} />
             <FieldLabel>Phone *</FieldLabel>
             <input style={bookFieldStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
-            <FieldLabel>Date *</FieldLabel>
+            <FieldLabel>Date of Birthday party *</FieldLabel>
             <input
               style={bookFieldStyle}
               type="date"

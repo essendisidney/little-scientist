@@ -164,6 +164,10 @@ export function EnquirySuccess({ title, enquiryRef }: { title: string; enquiryRe
 const REACH_PHONE_DISPLAY = '0700 101 425'
 const REACH_PHONE_E164 = '254700101425'
 
+export function venueWhatsAppUrl(message: string) {
+  return `https://wa.me/${REACH_PHONE_E164}?text=${encodeURIComponent(message)}`
+}
+
 export function DirectReachOut({
   context = 'Need a tailored birthday package? Call or WhatsApp us.',
   presetMessage = 'Hi Little Scientist — I would like a birthday/school plan.',
