@@ -645,7 +645,7 @@ export default function TicketPage() {
           Contact + disclaimers
         </div>
         <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.65, maxWidth: 600 }}>
-          <div>📍 Sabaki Estate, Mombasa Road, Nairobi</div>
+          <div>📍 Sabaki Estate, Athi River</div>
           <div>
             📞{' '}
             <a href="tel:0700101425" style={{ color: '#00c8a0', textDecoration: 'none', fontWeight: 800 }}>

@@ -6,11 +6,6 @@ import { staffFetch } from '@/lib/staff-fetch'
 
 const ENQUIRY_STATUSES = ['pending', 'contacted', 'confirmed', 'declined'] as const
 
-function guardianEmailFromNotes(notes?: string | null): string {
-  const m = String(notes || '').match(/Guardian email:\s*(\S+@\S+)/i)
-  return m?.[1] || '—'
-}
-
 function paymentStatusStyle(status: string): { bg: string; color: string } {
   const s = status.toLowerCase()
   if (s === 'paid') return { bg: 'rgba(74,222,128,0.1)', color: '#4ade80' }
@@ -191,7 +186,6 @@ export default function DashboardPage() {
       school_name: string
       contact_name: string
       contact_phone: string
-      contact_email: string
       student_count: number
       preferred_date: string
       status: string
@@ -273,7 +267,7 @@ export default function DashboardPage() {
         .limit(40),
       supabase
         .from('school_enquiries')
-        .select('enquiry_ref, school_name, contact_name, contact_phone, contact_email, student_count, preferred_date, status, created_at')
+        .select('enquiry_ref, school_name, contact_name, contact_phone, student_count, preferred_date, status, created_at')
         .order('created_at', { ascending: false })
         .limit(40),
     ])
@@ -342,7 +336,6 @@ export default function DashboardPage() {
           ref: e.enquiry_ref,
           name: e.parent_name,
           phone: e.phone,
-          email: guardianEmailFromNotes(e.special_requirements),
           guests: e.guest_count,
           preferred_date: e.preferred_date,
           status: e.status,
@@ -353,7 +346,6 @@ export default function DashboardPage() {
           school: e.school_name,
           contact: e.contact_name,
           phone: e.contact_phone,
-          email: e.contact_email,
           students: e.student_count,
           preferred_date: e.preferred_date,
           status: e.status,
@@ -1228,7 +1220,7 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          {['Ref', 'Parent', 'Phone', 'Email', 'Guests', 'Date', 'Status'].map(h => (
+                          {['Ref', 'Parent', 'Phone', 'Guests', 'Date', 'Status'].map(h => (
                             <th
                               key={h}
                               style={{
@@ -1260,18 +1252,6 @@ export default function DashboardPage() {
                               <a href={phoneTel(e.phone)} style={{ color: '#7dd3fc', textDecoration: 'none' }}>
                                 {e.phone}
                               </a>
-                            </td>
-                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
-                              {(() => {
-                                const email = guardianEmailFromNotes(e.special_requirements)
-                                return email !== '—' ? (
-                                  <a href={`mailto:${email}`} style={{ color: '#ffd700' }}>
-                                    {email}
-                                  </a>
-                                ) : (
-                                  '—'
-                                )
-                              })()}
                             </td>
                             <td style={{ padding: '10px 16px' }}>{e.guest_count}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
@@ -1325,7 +1305,7 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          {['Ref', 'School', 'Contact', 'Phone', 'Email', 'Students', 'Date', 'Status'].map(h => (
+                          {['Ref', 'School', 'Contact', 'Phone', 'Students', 'Date', 'Status'].map(h => (
                             <th
                               key={h}
                               style={{
@@ -1357,11 +1337,6 @@ export default function DashboardPage() {
                             <td style={{ padding: '10px 16px' }}>
                               <a href={phoneTel(e.contact_phone)} style={{ color: '#7dd3fc', textDecoration: 'none' }}>
                                 {e.contact_phone}
-                              </a>
-                            </td>
-                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
-                              <a href={`mailto:${e.contact_email}`} style={{ color: '#ffd700' }}>
-                                {e.contact_email}
                               </a>
                             </td>
                             <td style={{ padding: '10px 16px' }}>{e.student_count}</td>

@@ -29,7 +29,11 @@ export default function Navbar() {
       }`}
     >
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <Link href="/" className="font-[family-name:var(--font-heading)] text-base font-extrabold text-white sm:text-lg">
+        <Link
+          href="/"
+          className="flex items-center gap-2 font-[family-name:var(--font-heading)] text-base font-extrabold text-white sm:text-lg"
+        >
+          <span aria-hidden="true">🔬</span>
           Little Scientist
         </Link>
         <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">

@@ -2005,7 +2005,7 @@ export default function BookPage({
                       🎟️ View tickets and QR codes →
                     </a>
                     <div className="venue">
-                      📍 Sabaki Estate, Mombasa Road · 📞 Dr. Syokau Ilovi — 0700 101 425
+                      📍 Sabaki Estate, Athi River · 📞 0700 101 425
                       <br />
                       🌐 littlescientist.ke
                     </div>
