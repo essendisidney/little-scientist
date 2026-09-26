@@ -11,14 +11,23 @@ import { isKcbConfigured } from '@/lib/kcb/config'
 import { normalizeKenyaPhone } from '@/lib/phone'
 import { sanitizeGuestError } from '@/lib/guest-errors'
 import { rateLimit } from '@/lib/rate-limit'
+import { addDaysToDateKey, nairobiNow } from '@/lib/dates'
 
 export const maxDuration = 60
 
 const DEFAULT_ADULT_PRICE = 1000
 const DEFAULT_CHILD_PRICE = 800
 const DEFAULT_INFANT_PRICE = 0
-const MIN_DAYS = 0
 const MAX_DAYS = 12
+
+function slotStartMinutes(timeSlot: string): number {
+  const [start] = String(timeSlot || '').split('-')
+  const [hh, mm] = String(start || '').split(':')
+  const h = Number(hh)
+  const m = Number(mm)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return Number.NaN
+  return h * 60 + m
+}
 
 export async function POST(req: NextRequest) {
   let holdSessionId: string | null = null
@@ -117,15 +126,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not enough spots in this session' }, { status: 409 })
     }
 
-    const sessionDate = new Date(session.session_date)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const minDate = new Date(today)
-    minDate.setDate(minDate.getDate() + MIN_DAYS)
-    const maxDate = new Date(today)
-    maxDate.setDate(maxDate.getDate() + MAX_DAYS)
-    if (sessionDate < minDate) return NextResponse.json({ error: 'Selected date is not bookable yet' }, { status: 400 })
-    if (sessionDate > maxDate) return NextResponse.json({ error: 'Cannot book more than 12 days ahead' }, { status: 400 })
+    const nowNairobi = nairobiNow()
+    const sessionDate = String(session.session_date).slice(0, 10)
+    const maxKey = addDaysToDateKey(nowNairobi.dateKey, MAX_DAYS)
+    if (sessionDate < nowNairobi.dateKey) {
+      return NextResponse.json({ error: 'Selected date is not bookable yet' }, { status: 400 })
+    }
+    if (sessionDate > maxKey) {
+      return NextResponse.json({ error: 'Cannot book more than 12 days ahead' }, { status: 400 })
+    }
+    if (sessionDate === nowNairobi.dateKey && slotStartMinutes(String(session.time_slot)) <= nowNairobi.minutes) {
+      return NextResponse.json({ error: 'This session has already started' }, { status: 400 })
+    }
 
     const bookingPayload: Record<string, unknown> = {
       session_id: sessionId,

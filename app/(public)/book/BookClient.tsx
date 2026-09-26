@@ -18,6 +18,7 @@ import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
 import WatermarkBg from '@/components/portal/WatermarkBg'
 import { isValidKenyaPhone } from '@/lib/phone'
+import { addDaysToDateKey, nairobiNow } from '@/lib/dates'
 
 const DEFAULT_PRICING = {
   adult18PlusKes: 1000,
@@ -94,12 +95,10 @@ function slotStartMinutes(timeSlot: string): number {
 
 const LAST_SLOT_START_MINUTES = Math.max(...BOOKABLE_SLOTS.map(slotStartMinutes).filter(Number.isFinite))
 
-/** True if this calendar date still has at least one bookable start time left. */
-function dateHasRemainingSlots(dateStr: string, now = new Date()): boolean {
-  const todayKey = toLocalDateKey(now)
-  if (dateStr !== todayKey) return true
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  return nowMinutes < LAST_SLOT_START_MINUTES
+/** True if this calendar date still has at least one bookable start time left in Nairobi. */
+function dateHasRemainingSlots(dateStr: string, now = nairobiNow()): boolean {
+  if (dateStr !== now.dateKey) return true
+  return now.minutes < LAST_SLOT_START_MINUTES
 }
 
 
@@ -122,8 +121,8 @@ export default function BookPage({
     },
   )
   const [currentMonth, setCurrentMonth] = useState(() => {
-    const d = new Date()
-    return { year: d.getFullYear(), month: d.getMonth() }
+    const [y, m] = nairobiNow().dateKey.split('-').map(Number)
+    return { year: y, month: (m || 1) - 1 }
   })
   const [selectedDate, setSelectedDate] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
@@ -238,13 +237,9 @@ export default function BookPage({
     const { year, month } = currentMonth
     const firstDay = new Date(year, month, 1).getDay()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const minDate = new Date(today)
-    minDate.setDate(minDate.getDate() + MIN_DAYS)
-    const maxDate = new Date(today)
-    maxDate.setDate(maxDate.getDate() + MAX_DAYS)
-    const now = new Date()
+    const now = nairobiNow()
+    const minKey = addDaysToDateKey(now.dateKey, MIN_DAYS)
+    const maxKey = addDaysToDateKey(now.dateKey, MAX_DAYS)
     const days: {
       date: Date | null
       dateStr: string
@@ -261,8 +256,8 @@ export default function BookPage({
       const dateStr = toLocalDateKey(date)
       const dow = date.getDay()
       const isWeekend = dow === 0 || dow === 6
-      const isPast = date < minDate
-      const tooFar = date > maxDate
+      const isPast = dateStr < minKey
+      const tooFar = dateStr > maxKey
       const withinWindow = !isPast && !tooFar
       const bookable = withinWindow && dateHasRemainingSlots(dateStr, now)
       days.push({
@@ -278,15 +273,14 @@ export default function BookPage({
   })()
 
   const canGoPrev = (() => {
-    const t = new Date()
-    return currentMonth.year > t.getFullYear() || currentMonth.month > t.getMonth()
+    const [y, m] = nairobiNow().dateKey.split('-').map(Number)
+    return currentMonth.year > y || currentMonth.month > (m || 1) - 1
   })()
   const canGoNext = (() => {
-    const m = new Date()
-    m.setDate(m.getDate() + MAX_DAYS)
+    const [y, m] = addDaysToDateKey(nairobiNow().dateKey, MAX_DAYS).split('-').map(Number)
     return (
-      currentMonth.year < m.getFullYear() ||
-      (currentMonth.year === m.getFullYear() && currentMonth.month < m.getMonth())
+      currentMonth.year < y ||
+      (currentMonth.year === y && currentMonth.month < (m || 1) - 1)
     )
   })()
 
@@ -332,14 +326,11 @@ export default function BookPage({
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      const start = nairobiNow().dateKey
       const dates: string[] = []
       for (let i = MIN_DAYS; i <= MAX_DAYS; i++) {
-        const d = new Date(today)
-        d.setDate(today.getDate() + i)
-        const key = toLocalDateKey(d)
-        if (dateHasRemainingSlots(key, new Date())) dates.push(key)
+        const key = addDaysToDateKey(start, i)
+        if (dateHasRemainingSlots(key)) dates.push(key)
       }
       if (dates.length === 0) return
 
@@ -1297,12 +1288,10 @@ export default function BookPage({
                   BOOKABLE_SLOTS.map((slot, idx) => {
                     const session = sessions.find(s => s.time_slot === slot) || null
                     const available = session ? sessionOpenSpots(session) : 0
-                    const now = new Date()
-                    const todayKey = toLocalDateKey(now)
-                    const isToday = selectedDate === todayKey
-                    const nowMinutes = now.getHours() * 60 + now.getMinutes()
+                    const now = nairobiNow()
+                    const isToday = selectedDate === now.dateKey
                     const startMins = slotStartMinutes(slot)
-                    const isPastSlot = isToday && Number.isFinite(startMins) && startMins <= nowMinutes
+                    const isPastSlot = isToday && Number.isFinite(startMins) && startMins <= now.minutes
                     const isFull = !!session && (session.is_blocked || available <= 0)
                     const missing = !session
                     const blocked = missing || isFull || isPastSlot
@@ -1340,7 +1329,7 @@ export default function BookPage({
                           <div className="slot-spots-num" style={{ color }}>
                             {blocked ? '—' : showSpotCount ? available : '✓'}
                           </div>
-                          <div className="slot-spots-lbl">{showSpotCount ? 'spots left' : blocked ? 'spots left' : 'open'}</div>
+                          <div className="slot-spots-lbl">{showSpotCount ? 'spots left' : blocked ? 'closed' : 'open'}</div>
                         </div>
                         {!blocked && (
                           <div className="slot-arr" style={{ color }}>
