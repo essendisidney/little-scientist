@@ -6,7 +6,7 @@ import WatermarkBg from '@/components/portal/WatermarkBg'
 import Disclaimers from '@/components/portal/Disclaimers'
 import TermsGate from '@/components/portal/TermsGate'
 import { DirectReachOut, FieldLabel, bookFieldStyle, SegmentedTwo, venueWhatsAppUrl } from '../book/VisitTypeUi'
-import { toLocalDateKey } from '@/lib/dates'
+import { todayInNairobi } from '@/lib/dates'
 import { isValidKenyaPhone } from '@/lib/phone'
 
 const MIN_CHILDREN = 1
@@ -27,7 +27,7 @@ export default function BirthdaysPage() {
   const [enquiryRef, setEnquiryRef] = useState('')
   const [whatsAppUrl, setWhatsAppUrl] = useState('')
 
-  const minDate = useMemo(() => toLocalDateKey(), [])
+  const minDate = useMemo(() => todayInNairobi(), [])
 
   async function submit() {
     setError('')

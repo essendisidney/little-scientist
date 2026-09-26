@@ -6,6 +6,15 @@ import { staffFetch } from '@/lib/staff-fetch'
 
 const ENQUIRY_STATUSES = ['pending', 'contacted', 'confirmed', 'declined'] as const
 
+function enquiryDetails(notes?: string | null) {
+  const text = String(notes || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('Food and drinks are not included'))
+    .join(' · ')
+  return text || '—'
+}
+
 function paymentStatusStyle(status: string): { bg: string; color: string } {
   const s = status.toLowerCase()
   if (s === 'paid') return { bg: 'rgba(74,222,128,0.1)', color: '#4ade80' }
@@ -189,6 +198,7 @@ export default function DashboardPage() {
       student_count: number
       preferred_date: string
       status: string
+      special_requirements?: string | null
       created_at?: string
     }[]
   >([])
@@ -267,7 +277,7 @@ export default function DashboardPage() {
         .limit(40),
       supabase
         .from('school_enquiries')
-        .select('enquiry_ref, school_name, contact_name, contact_phone, student_count, preferred_date, status, created_at')
+        .select('enquiry_ref, school_name, contact_name, contact_phone, student_count, preferred_date, status, special_requirements, created_at')
         .order('created_at', { ascending: false })
         .limit(40),
     ])
@@ -337,6 +347,7 @@ export default function DashboardPage() {
           name: e.parent_name,
           phone: e.phone,
           guests: e.guest_count,
+          details: enquiryDetails(e.special_requirements),
           preferred_date: e.preferred_date,
           status: e.status,
         })),
@@ -347,6 +358,7 @@ export default function DashboardPage() {
           contact: e.contact_name,
           phone: e.contact_phone,
           students: e.student_count,
+          details: enquiryDetails(e.special_requirements),
           preferred_date: e.preferred_date,
           status: e.status,
         })),
@@ -1220,7 +1232,7 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          {['Ref', 'Parent', 'Phone', 'Guests', 'Date', 'Status'].map(h => (
+                          {['Ref', 'Parent', 'Phone', 'Guests', 'Details', 'Date', 'Status'].map(h => (
                             <th
                               key={h}
                               style={{
@@ -1254,6 +1266,7 @@ export default function DashboardPage() {
                               </a>
                             </td>
                             <td style={{ padding: '10px 16px' }}>{e.guest_count}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.7)', maxWidth: 280 }}>{enquiryDetails(e.special_requirements)}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
                               {(() => {
@@ -1305,7 +1318,7 @@ export default function DashboardPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          {['Ref', 'School', 'Contact', 'Phone', 'Students', 'Date', 'Status'].map(h => (
+                          {['Ref', 'School', 'Contact', 'Phone', 'Students', 'Details', 'Date', 'Status'].map(h => (
                             <th
                               key={h}
                               style={{
@@ -1340,6 +1353,7 @@ export default function DashboardPage() {
                               </a>
                             </td>
                             <td style={{ padding: '10px 16px' }}>{e.student_count}</td>
+                            <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.7)', maxWidth: 280 }}>{enquiryDetails(e.special_requirements)}</td>
                             <td style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.55)' }}>{e.preferred_date}</td>
                             <td style={{ padding: '10px 16px' }}>
                               {(() => {
