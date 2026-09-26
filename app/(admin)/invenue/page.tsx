@@ -15,6 +15,7 @@ type Booking = {
   booker_phone: string
   adult_count: number
   child_count: number
+  infant_count?: number | null
   total_amount_kes: number
   sessions: { session_date: string; time_slot: string }
   in_venue_purchases: Purchase[]
@@ -499,6 +500,7 @@ export default function InVenuePage() {
                   </div>
                   <div className="visitor-badge" style={{ background: 'rgba(127,255,212,0.1)', color: '#7FFFD4' }}>
                     👨‍👩 {booking.adult_count}A · {booking.child_count}C
+                    {(booking.infant_count || 0) > 0 ? ` · ${booking.infant_count} under 95cm` : ''}
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
